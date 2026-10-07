@@ -2,8 +2,8 @@ use super::decoder::FfmpegVideoDecoder;
 use crate::audio::{AudioPlayer, FfmpegAudioDecoder};
 use parking_lot::RwLock;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 static NEXT_PLAYER_ID: AtomicU64 = AtomicU64::new(1);
@@ -116,7 +116,8 @@ impl VideoPlayer {
                             gpui::DevicePixels(decoder.height() as i32),
                         );
                         let directx_surface = gpui::DirectXSurface::new(d3d_tex, size);
-                        *current_surface.write() = Some(gpui::SurfaceSource::DirectX(directx_surface));
+                        *current_surface.write() =
+                            Some(gpui::SurfaceSource::DirectX(directx_surface));
                         if let Some(cb) = &on_frame {
                             cb();
                         }
@@ -134,9 +135,9 @@ impl VideoPlayer {
                             decoder.height(),
                             frame_data,
                         ) {
-                            let render_img = Arc::new(gpui::RenderImage::new(
-                                smallvec::smallvec![image::Frame::new(rgba_img)],
-                            ));
+                            let render_img = Arc::new(gpui::RenderImage::new(smallvec::smallvec![
+                                image::Frame::new(rgba_img)
+                            ]));
                             *current_image.write() = Some(render_img);
                             if let Some(cb) = &on_frame {
                                 cb();
@@ -157,22 +158,29 @@ impl VideoPlayer {
                         *position_secs.write() = target;
 
                         // Decode frame at seek position immediately
-                        let mut seek_hw = false;
                         #[cfg(target_os = "windows")]
-                        if d3d11_hw_active {
+                        let seek_hw = if d3d11_hw_active {
                             if let Ok(Some(d3d_tex)) = decoder.read_next_d3d11_texture() {
                                 let size = gpui::size(
                                     gpui::DevicePixels(decoder.width() as i32),
                                     gpui::DevicePixels(decoder.height() as i32),
                                 );
                                 let directx_surface = gpui::DirectXSurface::new(d3d_tex, size);
-                                *current_surface.write() = Some(gpui::SurfaceSource::DirectX(directx_surface));
+                                *current_surface.write() =
+                                    Some(gpui::SurfaceSource::DirectX(directx_surface));
                                 if let Some(cb) = &on_frame {
                                     cb();
                                 }
-                                seek_hw = true;
+                                true
+                            } else {
+                                false
                             }
-                        }
+                        } else {
+                            false
+                        };
+
+                        #[cfg(not(target_os = "windows"))]
+                        let seek_hw = false;
 
                         if !seek_hw {
                             if let Ok(true) = decoder.read_next_frame(&mut buffer) {
@@ -182,9 +190,10 @@ impl VideoPlayer {
                                     decoder.height(),
                                     frame_data,
                                 ) {
-                                    let render_img = Arc::new(gpui::RenderImage::new(
-                                        smallvec::smallvec![image::Frame::new(rgba_img)],
-                                    ));
+                                    let render_img =
+                                        Arc::new(gpui::RenderImage::new(smallvec::smallvec![
+                                            image::Frame::new(rgba_img)
+                                        ]));
                                     *current_image.write() = Some(render_img);
                                     if let Some(cb) = &on_frame {
                                         cb();
@@ -209,7 +218,8 @@ impl VideoPlayer {
                                     gpui::DevicePixels(decoder.height() as i32),
                                 );
                                 let directx_surface = gpui::DirectXSurface::new(d3d_tex, size);
-                                *current_surface.write() = Some(gpui::SurfaceSource::DirectX(directx_surface));
+                                *current_surface.write() =
+                                    Some(gpui::SurfaceSource::DirectX(directx_surface));
                                 if let Some(cb) = &on_frame {
                                     cb();
                                 }
@@ -235,9 +245,10 @@ impl VideoPlayer {
                                     decoder.height(),
                                     frame_data,
                                 ) {
-                                    let render_img = Arc::new(gpui::RenderImage::new(
-                                        smallvec::smallvec![image::Frame::new(rgba_img)],
-                                    ));
+                                    let render_img =
+                                        Arc::new(gpui::RenderImage::new(smallvec::smallvec![
+                                            image::Frame::new(rgba_img)
+                                        ]));
                                     *current_image.write() = Some(render_img);
 
                                     if let Some(cb) = &on_frame {
@@ -285,10 +296,7 @@ impl VideoPlayer {
 
     /// Creates a stream-backed video player without a file worker thread.
     /// Frames are pushed in via `push_rgba_frame` (e.g. from WebRTC or Camera).
-    pub fn new_stream(
-        src: PathBuf,
-        on_frame: Option<Arc<dyn Fn() + Send + Sync>>,
-    ) -> Arc<Self> {
+    pub fn new_stream(src: PathBuf, on_frame: Option<Arc<dyn Fn() + Send + Sync>>) -> Arc<Self> {
         let id = NEXT_PLAYER_ID.fetch_add(1, Ordering::SeqCst);
         let is_playing = Arc::new(AtomicBool::new(true));
         let is_looping = Arc::new(AtomicBool::new(false));
@@ -328,9 +336,9 @@ impl VideoPlayer {
     /// Pushes a BGRA frame directly into this video player (native GPUI format).
     pub fn push_bgra_frame(&self, width: u32, height: u32, bgra_data: Vec<u8>) {
         if let Some(rgba_img) = image::RgbaImage::from_raw(width, height, bgra_data) {
-            let render_img = Arc::new(gpui::RenderImage::new(
-                smallvec::smallvec![image::Frame::new(rgba_img)],
-            ));
+            let render_img = Arc::new(gpui::RenderImage::new(smallvec::smallvec![
+                image::Frame::new(rgba_img)
+            ]));
             *self.current_image.write() = Some(render_img);
             *self.last_accessed.lock() = Instant::now();
             if let Some(cb) = &self.on_frame {
@@ -384,7 +392,10 @@ impl VideoPlayer {
         width: u32,
         height: u32,
     ) {
-        let size = gpui::size(gpui::DevicePixels(width as i32), gpui::DevicePixels(height as i32));
+        let size = gpui::size(
+            gpui::DevicePixels(width as i32),
+            gpui::DevicePixels(height as i32),
+        );
         let surface = gpui::DirectXSurface::new(texture, size);
         self.push_directx_surface(surface);
     }
