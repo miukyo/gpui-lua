@@ -831,20 +831,12 @@ fn convert_div_node(
 
     // Attach zero-overhead bounds tracker for DevTools inspection
     let path_clone = current_path.clone();
-    el = el.child(
-        canvas(
-            move |_bounds, _window, _cx| (),
-            move |bounds, (), _window, _cx| {
-                if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
-                    dt.record_node_bounds(&path_clone, bounds);
-                }
-            },
-        )
-        .size_full()
-        .absolute()
-        .top_0()
-        .left_0(),
-    );
+    el = el.on_prepaint(move |prep, _window, _cx| {
+        if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+            dt.record_node_bounds(&path_clone, prep.bounds);
+        }
+    });
+
     // 8. Animations
     if let Some(anim) = div_node.animation {
         let mut animation = Animation::new(Duration::from_millis(anim.duration_ms));

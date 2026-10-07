@@ -11,8 +11,13 @@ pub fn render_devtools_overlay(
     canvas(
         move |_bounds, _window, _cx| (),
         move |_canvas_bounds, (), window, _cx| {
-            let active_path = devtools_clone.hovered_path.read().clone()
-                .or_else(|| devtools_clone.selected_path.read().clone());
+            let active_path = devtools_clone.hovered_path.read().clone().or_else(|| {
+                if devtools_clone.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
+                    devtools_clone.selected_path.read().clone()
+                } else {
+                    None
+                }
+            });
 
             let Some(path) = active_path else {
                 return;

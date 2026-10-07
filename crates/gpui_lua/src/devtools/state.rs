@@ -1,4 +1,4 @@
-use crate::dsl::node::{Length, LuaNode, StyleProps};
+use crate::dsl::node::{ColorSpec, Length, LuaNode, StyleProps};
 use gpui::{Bounds, Pixels};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -35,10 +35,10 @@ pub struct ElementTreeNode {
     pub tag: String,
     pub id: Option<String>,
     pub text_preview: Option<String>,
+    pub attrs: Vec<(String, String)>,
     pub children_count: usize,
     pub style: StyleProps,
     pub children: Vec<ElementTreeNode>,
-    pub is_expanded: bool,
 }
 
 impl ElementTreeNode {
@@ -61,6 +61,41 @@ impl ElementTreeNode {
                     "div".to_string()
                 };
 
+                let mut attrs = Vec::new();
+                if let Some(ref w) = d.style.width {
+                    match w {
+                        Length::Px(p) => attrs.push(("w".to_string(), format!("{p:.0}"))),
+                        Length::Percent(pct) => attrs.push(("w".to_string(), format!("{pct:.0}%"))),
+                        Length::Full => attrs.push(("w".to_string(), "full".to_string())),
+                        _ => {}
+                    }
+                }
+                if let Some(ref h) = d.style.height {
+                    match h {
+                        Length::Px(p) => attrs.push(("h".to_string(), format!("{p:.0}"))),
+                        Length::Percent(pct) => attrs.push(("h".to_string(), format!("{pct:.0}%"))),
+                        Length::Full => attrs.push(("h".to_string(), "full".to_string())),
+                        _ => {}
+                    }
+                }
+                if let Some(ref bg) = d.style.background {
+                    match bg {
+                        ColorSpec::Hex(hex) => attrs.push(("bg".to_string(), hex.clone())),
+                        _ => {}
+                    }
+                }
+                if let Some(ref pad) = d.style.padding.top {
+                    if let Length::Px(p) = pad {
+                        attrs.push(("p".to_string(), format!("{p:.0}")));
+                    }
+                }
+                if let Some(r) = d.style.corner_radius {
+                    attrs.push(("rounded".to_string(), format!("{r:.0}")));
+                }
+                if let Some(g) = d.style.gap {
+                    attrs.push(("gap".to_string(), format!("{g:.0}")));
+                }
+
                 let children: Vec<ElementTreeNode> = d
                     .children
                     .iter()
@@ -78,10 +113,10 @@ impl ElementTreeNode {
                     tag,
                     id: d.id.clone(),
                     text_preview: None,
+                    attrs,
                     children_count,
                     style: d.style.clone(),
                     children,
-                    is_expanded: true,
                 }
             }
             LuaNode::Text(t) => {
@@ -90,6 +125,20 @@ impl ElementTreeNode {
                 } else {
                     t.content.clone()
                 };
+
+                let mut attrs = Vec::new();
+                if let Some(sz) = t.size {
+                    attrs.push(("size".to_string(), format!("{sz:.0}")));
+                }
+                if t.bold {
+                    attrs.push(("bold".to_string(), "true".to_string()));
+                }
+                if let Some(ref c) = t.color {
+                    match c {
+                        ColorSpec::Hex(h) => attrs.push(("color".to_string(), h.clone())),
+                        _ => {}
+                    }
+                }
 
                 let mut style = StyleProps::default();
                 if let Some(c) = &t.color {
@@ -104,10 +153,10 @@ impl ElementTreeNode {
                     tag: "text".to_string(),
                     id: None,
                     text_preview: Some(preview),
+                    attrs,
                     children_count: 0,
                     style,
                     children: Vec::new(),
-                    is_expanded: false,
                 }
             }
             LuaNode::Input(inp) => Self {
@@ -115,10 +164,10 @@ impl ElementTreeNode {
                 tag: if inp.multiline { "textarea".to_string() } else { "input".to_string() },
                 id: Some(inp.id.clone()),
                 text_preview: inp.value.clone().or_else(|| Some(inp.placeholder.clone())),
+                attrs: vec![("type".to_string(), if inp.multiline { "textarea".to_string() } else { "text".to_string() })],
                 children_count: 0,
                 style: inp.style.clone(),
                 children: Vec::new(),
-                is_expanded: false,
             },
             LuaNode::Custom(c) => {
                 let children: Vec<ElementTreeNode> = c
@@ -132,15 +181,26 @@ impl ElementTreeNode {
                     })
                     .collect();
 
+                let mut attrs = Vec::new();
+                if let serde_json::Value::Object(ref map) = c.props {
+                    for (k, v) in map.iter().take(3) {
+                        let val_str = match v {
+                            serde_json::Value::String(s) => s.clone(),
+                            _ => v.to_string(),
+                        };
+                        attrs.push((k.clone(), val_str));
+                    }
+                }
+
                 Self {
                     path,
                     tag: c.tag.clone(),
                     id: None,
                     text_preview: None,
+                    attrs,
                     children_count: children.len(),
                     style: c.style.clone(),
                     children,
-                    is_expanded: true,
                 }
             }
             LuaNode::Svg(s) => Self {
@@ -148,40 +208,40 @@ impl ElementTreeNode {
                 tag: "svg".to_string(),
                 id: s.id.clone(),
                 text_preview: s.path.clone(),
+                attrs: Vec::new(),
                 children_count: 0,
                 style: s.style.clone(),
                 children: Vec::new(),
-                is_expanded: false,
             },
             LuaNode::Img(im) => Self {
                 path,
                 tag: "img".to_string(),
                 id: im.id.clone(),
                 text_preview: Some(im.src.clone()),
+                attrs: vec![("src".to_string(), im.src.clone())],
                 children_count: 0,
                 style: im.style.clone(),
                 children: Vec::new(),
-                is_expanded: false,
             },
             LuaNode::Video(v) => Self {
                 path,
                 tag: "video".to_string(),
                 id: v.id.clone(),
                 text_preview: Some(v.src.clone()),
+                attrs: vec![("src".to_string(), v.src.clone())],
                 children_count: 0,
                 style: v.style.clone(),
                 children: Vec::new(),
-                is_expanded: false,
             },
             LuaNode::Canvas(c) => Self {
                 path,
                 tag: "canvas".to_string(),
                 id: c.id.clone(),
                 text_preview: None,
+                attrs: Vec::new(),
                 children_count: 0,
                 style: c.style.clone(),
                 children: Vec::new(),
-                is_expanded: false,
             },
         }
     }
@@ -336,6 +396,7 @@ pub struct DevToolsState {
     pub sql_query_result: RwLock<Option<Result<Vec<HashMap<String, serde_json::Value>>, String>>>,
     pub fps: RwLock<f32>,
     pub frame_time_ms: RwLock<f32>,
+    pub collapsed_paths: RwLock<std::collections::HashSet<Vec<usize>>>,
     pub next_id: AtomicU64,
 }
 
@@ -361,6 +422,7 @@ impl Default for DevToolsState {
             sql_query_result: RwLock::new(None),
             fps: RwLock::new(60.0),
             frame_time_ms: RwLock::new(16.6),
+            collapsed_paths: RwLock::new(std::collections::HashSet::new()),
             next_id: AtomicU64::new(1),
         }
     }
@@ -373,6 +435,19 @@ impl DevToolsState {
 
     pub fn next_uid(&self) -> u64 {
         self.next_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub fn is_collapsed(&self, path: &[usize]) -> bool {
+        self.collapsed_paths.read().contains(path)
+    }
+
+    pub fn toggle_collapsed(&self, path: &[usize]) {
+        let mut set = self.collapsed_paths.write();
+        if set.contains(path) {
+            set.remove(path);
+        } else {
+            set.insert(path.to_vec());
+        }
     }
 
     pub fn log(&self, level: LogLevel, msg: impl Into<String>) {

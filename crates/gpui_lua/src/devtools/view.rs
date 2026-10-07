@@ -3,8 +3,8 @@ use crate::devtools::state::{
 };
 use crate::runtime::LuaRuntime;
 use gpui::{
-    div, px, rgb, rgba, AnyElement, Context, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement,
-    Render, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, px, rgb, rgba, AnyElement, Context, ElementId, FocusHandle, InteractiveElement,
+    IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window,
 };
 use std::sync::Arc;
 
@@ -39,15 +39,15 @@ impl Render for DevToolsView {
             .size_full()
             .bg(rgb(0x181825))
             .text_color(rgb(0xcdd6f4))
-            .font_family(".SystemUIFont")
             .flex_col()
-            // 1. Top Navbar / Chromium DevTools Bar
+            .overflow_hidden()
+            // 1. Top Horizontal Main Navbar
             .child(self.render_navbar(active_tab, inspect_active, cx))
-            // 2. Tab Body Content
+            // 2. Active Tab Content (Full Remaining Viewport)
             .child(
                 div()
                     .flex_1()
-                    .size_full()
+                    .w_full()
                     .overflow_hidden()
                     .child(match active_tab {
                         DevToolsTab::Elements => self.render_elements_tab(cx).into_any_element(),
@@ -61,7 +61,7 @@ impl Render for DevToolsView {
 }
 
 impl DevToolsView {
-    // ── Navigation Bar ──────────────────────────────────────────────────────────
+    // ── Top Horizontal Navbar ───────────────────────────────────────────────────
     fn render_navbar(&self, active_tab: DevToolsTab, inspect_active: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let state_inspect = self.state.clone();
         let bridge_inspect = self.runtime.bridge().clone();
@@ -69,9 +69,9 @@ impl DevToolsView {
 
         let tabs = [
             (DevToolsTab::Elements, "Elements"),
+            (DevToolsTab::Console, "Console"),
             (DevToolsTab::Network, "Network"),
             (DevToolsTab::Storage, "Storage"),
-            (DevToolsTab::Console, "Console"),
             (DevToolsTab::Performance, "Performance"),
         ];
 
@@ -79,7 +79,7 @@ impl DevToolsView {
         let node_count = self.state.node_bounds.read().len();
 
         div()
-            .h(px(40.0))
+            .h(px(36.0))
             .w_full()
             .bg(rgb(0x11111b))
             .border_b_1()
@@ -87,43 +87,48 @@ impl DevToolsView {
             .flex_row()
             .items_center()
             .justify_between()
-            .px(px(8.0))
-            // Left: Inspect cursor button + Tab links
+            .px(px(6.0))
             .child(
                 div()
                     .flex_row()
                     .items_center()
-                    .gap(px(4.0))
-                    // Inspect Cursor Toggle
+                    .gap(px(2.0))
+                    // Inspect Cursor Toggle Button
                     .child(
                         div()
                             .id("devtools_inspect_btn")
-                            .px(px(10.0))
-                            .py(px(5.0))
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .mr(px(4.0))
                             .rounded(px(4.0))
                             .cursor_pointer()
                             .bg(if inspect_active { rgb(0x3b82f6) } else { rgb(0x313244) })
                             .text_color(if inspect_active { rgb(0x11111b) } else { rgb(0xcdd6f4) })
+                            .text_size(px(12.0))
                             .on_click(cx.listener(move |_this, _event, _window, cx| {
                                 let new_val = !state_inspect.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed);
                                 state_inspect.inspect_cursor_active.store(new_val, std::sync::atomic::Ordering::Relaxed);
                                 bridge_inspect.notify();
                                 cx.notify();
                             }))
-                            .child(if inspect_active { "🔍 Inspecting..." } else { "🔍 Inspect (Ctrl+Shift+C)" })
+                            .child(if inspect_active { "🔍 Inspecting" } else { "🔍 Inspect" })
                     )
-                    // DevTools Tabs
+                    // Horizontal Tab Buttons
                     .children(tabs.into_iter().map(move |(tab, label)| {
                         let is_active = tab == active_tab;
                         let st = state_tabs.clone();
                         div()
                             .id(ElementId::NamedInteger(SharedString::new_static("dev_tab"), tab as u64))
                             .px(px(12.0))
-                            .py(px(6.0))
-                            .rounded(px(4.0))
+                            .h(px(35.0))
+                            .flex_row()
+                            .items_center()
                             .cursor_pointer()
-                            .bg(if is_active { rgb(0x313244) } else { rgba(0x00000000) })
-                            .text_color(if is_active { rgb(0x89b4fa) } else { rgb(0xa6adc8) })
+                            .border_b_2()
+                            .border_color(if is_active { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                            .text_color(if is_active { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                            .text_size(px(12.0))
+                            .font_weight(if is_active { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
                             .on_click(cx.listener(move |_this, _event, _window, cx| {
                                 *st.active_tab.write() = tab;
                                 cx.notify();
@@ -131,16 +136,17 @@ impl DevToolsView {
                             .child(label)
                     }))
             )
-            // Right: Metrics Summary
+            // Right Side Telemetry Badges
             .child(
                 div()
                     .flex_row()
                     .items_center()
-                    .gap(px(12.0))
-                    .text_size(px(12.0))
+                    .gap(px(10.0))
+                    .px(px(6.0))
+                    .text_size(px(11.0))
                     .text_color(rgb(0x6c7086))
-                    .child(format!("{node_count} nodes"))
-                    .child(format!("{fps:.0} FPS"))
+                    .child(div().child(format!("{node_count} nodes")))
+                    .child(div().text_color(rgb(0xa6e3a1)).child(format!("{fps:.0} FPS")))
             )
     }
 
@@ -159,62 +165,80 @@ impl DevToolsView {
         div()
             .size_full()
             .flex_row()
-            // Left pane: DOM Element Tree (width ~55%)
+            .overflow_hidden()
+            // Left Pane: DOM Element Hierarchy Tree
             .child(
                 div()
-                    .w(px(520.0))
+                    .flex_1()
                     .h_full()
                     .border_r_1()
                     .border_color(rgb(0x313244))
                     .flex_col()
+                    .overflow_hidden()
                     .child(
                         div()
-                            .p(px(8.0))
+                            .h(px(28.0))
+                            .w_full()
+                            .bg(rgb(0x11111b))
                             .border_b_1()
                             .border_color(rgb(0x313244))
-                            .bg(rgb(0x181825))
-                            .text_size(px(12.0))
+                            .px(px(8.0))
+                            .flex_row()
+                            .items_center()
+                            .text_size(px(11.0))
                             .text_color(rgb(0xa6adc8))
-                            .child("Elements Tree (Click to inspect / highlight)")
+                            .child("Elements Hierarchy")
                     )
                     .child(
                         div()
                             .id("elements_tree_scroll")
                             .flex_1()
-                            .overflow_y_scroll()
-                            .p(px(8.0))
+                            .w_full()
+                            .overflow_scroll()
+                            .py(px(4.0))
                             .child(if let Some(ref root) = *tree_guard {
-                                self.render_tree_node(root, selected_path.as_deref(), 0, cx).into_any_element()
+                                self.render_tree_node(root, selected_path.as_deref(), 0, cx)
                             } else {
-                                div().text_color(rgb(0x6c7086)).child("<No active component rendered>").into_any_element()
+                                div()
+                                    .p(px(12.0))
+                                    .text_color(rgb(0x6c7086))
+                                    .child("<No active component rendered>")
+                                    .into_any_element()
                             })
                     )
             )
-            // Right pane: Style & Box Model Inspector (width ~45%)
+            // Right Pane: Inspector (Styles & Box Model)
             .child(
                 div()
-                    .flex_1()
+                    .w(px(380.0))
                     .h_full()
                     .flex_col()
                     .bg(rgb(0x181825))
-                    // Sub-tab switcher: Styles / Box Model
+                    .overflow_hidden()
+                    // Horizontal Inspector Tabs
                     .child(
                         div()
-                            .flex_row()
+                            .h(px(28.0))
+                            .w_full()
+                            .bg(rgb(0x11111b))
                             .border_b_1()
                             .border_color(rgb(0x313244))
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .gap(px(6.0))
+                            .flex_row()
+                            .items_center()
+                            .px(px(6.0))
+                            .gap(px(4.0))
                             .child(
                                 div()
                                     .id("subtab_styles")
                                     .px(px(10.0))
-                                    .py(px(4.0))
-                                    .rounded(px(4.0))
+                                    .h(px(27.0))
+                                    .flex_row()
+                                    .items_center()
                                     .cursor_pointer()
-                                    .bg(if sub_tab == ElementsSubTab::Styles { rgb(0x313244) } else { rgba(0x00000000) })
-                                    .text_color(if sub_tab == ElementsSubTab::Styles { rgb(0x89b4fa) } else { rgb(0xa6adc8) })
+                                    .border_b_2()
+                                    .border_color(if sub_tab == ElementsSubTab::Styles { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                                    .text_color(if sub_tab == ElementsSubTab::Styles { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = state_sub.clone();
                                         move |_this, _event, _window, cx| {
@@ -228,11 +252,14 @@ impl DevToolsView {
                                 div()
                                     .id("subtab_boxmodel")
                                     .px(px(10.0))
-                                    .py(px(4.0))
-                                    .rounded(px(4.0))
+                                    .h(px(27.0))
+                                    .flex_row()
+                                    .items_center()
                                     .cursor_pointer()
-                                    .bg(if sub_tab == ElementsSubTab::BoxModel { rgb(0x313244) } else { rgba(0x00000000) })
-                                    .text_color(if sub_tab == ElementsSubTab::BoxModel { rgb(0x89b4fa) } else { rgb(0xa6adc8) })
+                                    .border_b_2()
+                                    .border_color(if sub_tab == ElementsSubTab::BoxModel { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                                    .text_color(if sub_tab == ElementsSubTab::BoxModel { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = state_sub.clone();
                                         move |_this, _event, _window, cx| {
@@ -243,12 +270,13 @@ impl DevToolsView {
                                     .child("Box Model")
                             )
                     )
-                    // Sub-tab content
+                    // Sub-tab Content Area
                     .child(
                         div()
                             .id("styles_scroll")
                             .flex_1()
-                            .overflow_y_scroll()
+                            .w_full()
+                            .overflow_scroll()
                             .p(px(12.0))
                             .child(if let Some(node) = selected_node {
                                 match sub_tab {
@@ -256,7 +284,11 @@ impl DevToolsView {
                                     ElementsSubTab::BoxModel => self.render_box_model_diagram(node).into_any_element(),
                                 }
                             } else {
-                                div().text_color(rgb(0x6c7086)).child("Select an element in the tree or click Inspect to view styles.").into_any_element()
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(rgb(0x6c7086))
+                                    .child("Select an element in the hierarchy tree to inspect its computed styles.")
+                                    .into_any_element()
                             })
                     )
             )
@@ -274,64 +306,148 @@ impl DevToolsView {
         let st_select = self.state.clone();
         let bridge_select = self.runtime.bridge().clone();
 
-        let tag_name = &node.tag;
-        let id_badge = node.id.as_deref().map(|id| format!("#{id}")).unwrap_or_default();
-        let preview = node.text_preview.as_deref().unwrap_or("");
+        let has_children = !node.children.is_empty();
+        let is_collapsed = self.state.is_collapsed(&node.path);
 
-        let indent = px(depth as f32 * 14.0);
+        let tag_color = rgb(0xf38ba8);      // Pink/red for tags
+        let attr_key_color = rgb(0xfab387); // Orange for attribute keys
+        let attr_val_color = rgb(0xa6e3a1); // Green for attribute values
+        let text_val_color = rgb(0x94e2d5); // Teal for text previews
+        let bracket_color = rgb(0x89dceb);  // Cyan for brackets
 
-        div()
-            .flex_col()
-            .child(
+        let indent_px = px(8.0 + depth as f32 * 14.0);
+
+        let mut row = div()
+            .id(ElementId::NamedInteger(SharedString::new_static("tree_row"), hash_path(&node.path)))
+            .flex_row()
+            .items_center()
+            .h(px(22.0))
+            .w_full()
+            .flex_shrink_0()
+            .pl(indent_px)
+            .pr(px(8.0))
+            .rounded(px(2.0))
+            .cursor_pointer()
+            .gap(px(4.0))
+            .text_size(px(12.0));
+
+        if is_selected {
+            row = row.bg(rgb(0x1e3a5f)).border_l_2().border_color(rgb(0x3b82f6));
+        } else {
+            row = row.hover(|s| s.bg(rgba(0xffffff0a)));
+        }
+
+        // Disclosure Arrow
+        if has_children {
+            let path_toggle = node.path.clone();
+            let st_toggle = self.state.clone();
+            let arrow_str = if is_collapsed { "▶" } else { "▼" };
+            row = row.child(
                 div()
-                    .id(ElementId::NamedInteger(SharedString::new_static("tree_row"), hash_path(&node.path)))
-                    .flex_row()
-                    .items_center()
-                    .py(px(2.0))
-                    .px(px(4.0))
-                    .rounded(px(3.0))
+                    .id(ElementId::NamedInteger(SharedString::new_static("arrow"), hash_path(&node.path)))
+                    .w(px(12.0))
+                    .text_size(px(8.0))
+                    .text_color(rgb(0x6c7086))
                     .cursor_pointer()
-                    .bg(if is_selected { rgb(0x1f4068) } else { rgba(0x00000000) })
                     .on_click(cx.listener(move |_this, _event, _window, cx| {
-                        *st_select.selected_path.write() = Some(path_clone.clone());
-                        bridge_select.notify();
+                        st_toggle.toggle_collapsed(&path_toggle);
                         cx.notify();
                     }))
-                    .child(div().w(indent))
-                    .child(
-                        div()
-                            .text_color(rgb(0xf38ba8))
-                            .child(format!("<{tag_name}"))
-                    )
-                    .child(
-                        if !id_badge.is_empty() {
-                            div().text_color(rgb(0xf9e2af)).child(id_badge).into_any_element()
-                        } else {
-                            div().into_any_element()
-                        }
-                    )
-                    .child(
-                        div().text_color(rgb(0xf38ba8)).child(">")
-                    )
-                    .child(
-                        if !preview.is_empty() {
-                            div().px(px(4.0)).text_color(rgb(0xa6e3a1)).child(format!("\"{preview}\"")).into_any_element()
-                        } else {
-                            div().into_any_element()
-                        }
-                    )
-                    .child(
-                        if node.children_count > 0 {
-                            div().text_color(rgb(0x6c7086)).text_size(px(10.0)).child(format!("({} children)", node.children_count)).into_any_element()
-                        } else {
-                            div().into_any_element()
-                        }
-                    )
-            )
-            .children(node.children.iter().map(|child| {
-                self.render_tree_node(child, selected_path, depth + 1, cx)
+                    .child(arrow_str)
+            );
+        } else {
+            row = row.child(div().w(px(12.0)));
+        }
+
+        // Selection & Hover Event Handlers
+        let path_hover = node.path.clone();
+        row = row
+            .on_click(cx.listener(move |_this, _event, _window, cx| {
+                *st_select.selected_path.write() = Some(path_clone.clone());
+                bridge_select.notify();
+                cx.notify();
             }))
-            .into_any_element()
+            .on_hover({
+                let st = self.state.clone();
+                let br = self.runtime.bridge().clone();
+                move |hovered, _window, _cx| {
+                    if *hovered {
+                        *st.hovered_path.write() = Some(path_hover.clone());
+                    } else {
+                        let mut guard = st.hovered_path.write();
+                        if guard.as_ref() == Some(&path_hover) {
+                            *guard = None;
+                        }
+                    }
+                    br.notify();
+                }
+            });
+
+        // Opening Tag
+        row = row.child(
+            div()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .child(div().text_color(bracket_color).child("<"))
+                .child(div().text_color(tag_color).font_weight(gpui::FontWeight::BOLD).child(node.tag.clone()))
+        );
+
+        // ID Attribute
+        if let Some(ref id) = node.id {
+            row = row.child(
+                div()
+                    .flex_row()
+                    .items_center()
+                    .child(div().text_color(attr_key_color).child("id="))
+                    .child(div().text_color(attr_val_color).child(format!("\"{id}\"")))
+            );
+        }
+
+        // Other Extracted Attributes
+        for (k, v) in &node.attrs {
+            row = row.child(
+                div()
+                    .flex_row()
+                    .items_center()
+                    .child(div().text_color(attr_key_color).child(format!("{k}=")))
+                    .child(div().text_color(attr_val_color).child(format!("\"{v}\"")))
+            );
+        }
+
+        // Text preview or Closing
+        if let Some(ref text) = node.text_preview {
+            row = row.child(div().text_color(bracket_color).child(">"));
+            row = row.child(div().text_color(text_val_color).child(format!("\"{text}\"")));
+            row = row.child(div().text_color(bracket_color).child(format!("</{}>", node.tag)));
+        } else if has_children && is_collapsed {
+            row = row.child(div().text_color(bracket_color).child(">"));
+            row = row.child(div().text_color(rgb(0x6c7086)).child(format!("... </{}>", node.tag)));
+        } else {
+            row = row.child(div().text_color(bracket_color).child(">"));
+        }
+
+        let mut container = div().flex_col().child(row);
+
+        if has_children && !is_collapsed {
+            container = container.children(node.children.iter().map(|child| {
+                self.render_tree_node(child, selected_path, depth + 1, cx)
+            }));
+
+            // Closing Tag
+            let closing_row = div()
+                .flex_row()
+                .h(px(20.0))
+                .w_full()
+                .flex_shrink_0()
+                .pl(indent_px + px(12.0))
+                .text_size(px(12.0))
+                .text_color(bracket_color)
+                .child(format!("</{}>", node.tag));
+            container = container.child(closing_row);
+        }
+
+        container.into_any_element()
     }
 
     fn render_node_styles(&self, node: &crate::devtools::state::ElementTreeNode) -> impl IntoElement {
@@ -389,13 +505,13 @@ impl DevToolsView {
                     .font_weight(gpui::FontWeight::BOLD)
                     .text_color(rgb(0x89b4fa))
                     .pb(px(4.0))
-                    .child(format!("Matched CSS Rules for <{}>", node.tag))
+                    .child(format!("Matched Styles for <{}>", node.tag))
             )
             .children(props.into_iter().map(|(key, val)| {
                 div()
                     .flex_row()
                     .justify_between()
-                    .py(px(2.0))
+                    .py(px(3.0))
                     .border_b_1()
                     .border_color(rgb(0x313244))
                     .text_size(px(12.0))
@@ -413,7 +529,7 @@ impl DevToolsView {
             .flex_col()
             .items_center()
             .gap(px(12.0))
-            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("CSS Box Model"))
+            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("Box Model Diagram"))
             // Outer Margin Box (Orange #f6b26b)
             .child(
                 div()
@@ -447,11 +563,11 @@ impl DevToolsView {
                                     .flex_col()
                                     .items_center()
                                     .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("padding: {:.0}", m.padding_top)))
-                                    // Center Content Box (Blue #9fc5e8)
+                                    // Content Box (Blue #9fc5e8)
                                     .child(
                                         div()
                                             .px(px(16.0))
-                                            .py(px(10.0))
+                                            .py(px(8.0))
                                             .rounded(px(2.0))
                                             .bg(rgb(0x3b82f6))
                                             .text_color(rgb(0x11111b))
@@ -487,30 +603,34 @@ impl DevToolsView {
         div()
             .size_full()
             .flex_col()
-            // Filter Bar
+            .overflow_hidden()
+            // Horizontal Filter Toolbar Across Top
             .child(
                 div()
+                    .h(px(32.0))
+                    .w_full()
+                    .bg(rgb(0x11111b))
+                    .border_b_1()
+                    .border_color(rgb(0x313244))
                     .flex_row()
                     .items_center()
                     .justify_between()
-                    .px(px(12.0))
-                    .py(px(6.0))
-                    .border_b_1()
-                    .border_color(rgb(0x313244))
-                    .bg(rgb(0x181825))
+                    .px(px(8.0))
                     .child(
                         div()
                             .flex_row()
-                            .gap(px(6.0))
+                            .items_center()
+                            .gap(px(4.0))
                             .child(
                                 div()
                                     .id("net_filter_all")
                                     .px(px(8.0))
                                     .py(px(3.0))
-                                    .rounded(px(4.0))
+                                    .rounded(px(3.0))
                                     .cursor_pointer()
                                     .bg(if filter.is_none() { rgb(0x313244) } else { rgba(0x00000000) })
                                     .text_color(rgb(0xcdd6f4))
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = st_filter.clone();
                                         move |_this, _event, _window, cx| {
@@ -525,10 +645,11 @@ impl DevToolsView {
                                     .id("net_filter_fetch")
                                     .px(px(8.0))
                                     .py(px(3.0))
-                                    .rounded(px(4.0))
+                                    .rounded(px(3.0))
                                     .cursor_pointer()
                                     .bg(if filter == Some(NetworkType::Fetch) { rgb(0x313244) } else { rgba(0x00000000) })
                                     .text_color(rgb(0x89b4fa))
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = st_filter.clone();
                                         move |_this, _event, _window, cx| {
@@ -543,10 +664,11 @@ impl DevToolsView {
                                     .id("net_filter_ws")
                                     .px(px(8.0))
                                     .py(px(3.0))
-                                    .rounded(px(4.0))
+                                    .rounded(px(3.0))
                                     .cursor_pointer()
                                     .bg(if filter == Some(NetworkType::WebSocket) { rgb(0x313244) } else { rgba(0x00000000) })
                                     .text_color(rgb(0xa6e3a1))
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = st_filter.clone();
                                         move |_this, _event, _window, cx| {
@@ -561,10 +683,11 @@ impl DevToolsView {
                                     .id("net_filter_webrtc")
                                     .px(px(8.0))
                                     .py(px(3.0))
-                                    .rounded(px(4.0))
+                                    .rounded(px(3.0))
                                     .cursor_pointer()
                                     .bg(if filter == Some(NetworkType::WebRtc) { rgb(0x313244) } else { rgba(0x00000000) })
                                     .text_color(rgb(0xf9e2af))
+                                    .text_size(px(11.0))
                                     .on_click(cx.listener({
                                         let st = st_filter.clone();
                                         move |_this, _event, _window, cx| {
@@ -580,9 +703,11 @@ impl DevToolsView {
                             .id("net_clear_btn")
                             .px(px(8.0))
                             .py(px(3.0))
-                            .rounded(px(4.0))
+                            .rounded(px(3.0))
                             .cursor_pointer()
                             .bg(rgb(0x313244))
+                            .text_color(rgb(0xa6adc8))
+                            .text_size(px(11.0))
                             .on_click(cx.listener(move |_this, _event, _window, cx| {
                                 st_clear.network_entries.write().clear();
                                 *st_clear.selected_network_id.write() = None;
@@ -591,22 +716,23 @@ impl DevToolsView {
                             .child("Clear")
                     )
             )
-            // Table & Detail Split View
+            // Table and Detail Split
             .child(
                 div()
                     .flex_1()
+                    .w_full()
                     .flex_row()
-                    // Network Table
+                    .overflow_hidden()
+                    // Table Area
                     .child(
                         div()
                             .id("net_table_scroll")
-                            .w(px(580.0))
+                            .flex_1()
                             .h_full()
                             .border_r_1()
                             .border_color(rgb(0x313244))
-                            .overflow_y_scroll()
+                            .overflow_scroll()
                             .child(
-                                // Table Header
                                 div()
                                     .flex_row()
                                     .bg(rgb(0x181825))
@@ -657,26 +783,24 @@ impl DevToolsView {
                     .child(
                         div()
                             .id("net_detail_scroll")
-                            .flex_1()
+                            .w(px(380.0))
                             .h_full()
-                            .overflow_y_scroll()
+                            .overflow_scroll()
                             .p(px(12.0))
                             .child(if let Some(entry) = selected_entry {
                                 div()
                                     .flex_col()
-                                    .gap(px(12.0))
+                                    .gap(px(10.0))
                                     .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child(format!("{} {}", entry.method, entry.url)))
-                                    // Headers
                                     .child(
                                         div()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xa6adc8)).font_weight(gpui::FontWeight::BOLD).child("Response Headers:"))
                                             .children(entry.response_headers.into_iter().map(|(k, v)| {
-                                                div().text_size(px(12.0)).child(format!("{k}: {v}"))
+                                                div().text_size(px(11.0)).child(format!("{k}: {v}"))
                                             }))
                                     )
-                                    // WebSocket Frames
                                     .child(if !entry.ws_frames.is_empty() {
                                         div()
                                             .flex_col()
@@ -691,64 +815,68 @@ impl DevToolsView {
                                     } else {
                                         div().into_any_element()
                                     })
-                                    // WebRTC Stats
                                     .child(if let Some(stats) = entry.webrtc_stats {
                                         div()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xf9e2af)).font_weight(gpui::FontWeight::BOLD).child("WebRTC Connection Stats:"))
-                                            .child(div().text_size(px(12.0)).child(stats))
+                                            .child(div().text_size(px(11.0)).child(stats))
                                             .into_any_element()
                                     } else {
                                         div().into_any_element()
                                     })
-                                    // Body preview
                                     .child(if let Some(body) = entry.response_body {
                                         div()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xa6adc8)).font_weight(gpui::FontWeight::BOLD).child("Response Body:"))
-                                            .child(div().p(px(8.0)).rounded(px(4.0)).bg(rgb(0x11111b)).text_size(px(12.0)).child(body))
+                                            .child(div().p(px(8.0)).rounded(px(4.0)).bg(rgb(0x11111b)).text_size(px(11.0)).child(body))
                                             .into_any_element()
                                     } else {
                                         div().into_any_element()
                                     })
                                     .into_any_element()
                             } else {
-                                div().text_color(rgb(0x6c7086)).child("Select a request to inspect headers and payload.").into_any_element()
+                                div().text_color(rgb(0x6c7086)).child("Select a request to view headers and details.").into_any_element()
                             })
                     )
             )
     }
 
-    // ── Tab 3: Storage (SQLite, LocalStorage, Reactive Signals) ──────────────────
+    // ── Tab 3: Storage (Horizontal Tabs: LocalStorage / Databases / Signals) ────
     fn render_storage_tab(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let sub = *self.state.storage_sub_tab.read();
         let st_sub = self.state.clone();
 
         div()
             .size_full()
-            .flex_row()
-            // Left sidebar: Storage Type Selector
+            .flex_col()
+            .overflow_hidden()
+            // Horizontal Storage Tab Bar Across Top
             .child(
                 div()
-                    .w(px(220.0))
-                    .h_full()
-                    .border_r_1()
-                    .border_color(rgb(0x313244))
+                    .h(px(32.0))
+                    .w_full()
                     .bg(rgb(0x11111b))
-                    .p(px(8.0))
-                    .flex_col()
+                    .border_b_1()
+                    .border_color(rgb(0x313244))
+                    .flex_row()
+                    .items_center()
+                    .px(px(8.0))
                     .gap(px(4.0))
                     .child(
                         div()
                             .id("storage_tab_ls")
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(4.0))
+                            .px(px(12.0))
+                            .h(px(31.0))
+                            .flex_row()
+                            .items_center()
                             .cursor_pointer()
-                            .bg(if sub == StorageSubTab::LocalStorage { rgb(0x313244) } else { rgba(0x00000000) })
-                            .text_color(if sub == StorageSubTab::LocalStorage { rgb(0x89b4fa) } else { rgb(0xcdd6f4) })
+                            .border_b_2()
+                            .border_color(if sub == StorageSubTab::LocalStorage { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                            .text_color(if sub == StorageSubTab::LocalStorage { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                            .text_size(px(11.0))
+                            .font_weight(if sub == StorageSubTab::LocalStorage { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
                             .on_click(cx.listener({
                                 let st = st_sub.clone();
                                 move |_this, _event, _window, cx| {
@@ -761,12 +889,16 @@ impl DevToolsView {
                     .child(
                         div()
                             .id("storage_tab_db")
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(4.0))
+                            .px(px(12.0))
+                            .h(px(31.0))
+                            .flex_row()
+                            .items_center()
                             .cursor_pointer()
-                            .bg(if sub == StorageSubTab::Databases { rgb(0x313244) } else { rgba(0x00000000) })
-                            .text_color(if sub == StorageSubTab::Databases { rgb(0x89b4fa) } else { rgb(0xcdd6f4) })
+                            .border_b_2()
+                            .border_color(if sub == StorageSubTab::Databases { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                            .text_color(if sub == StorageSubTab::Databases { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                            .text_size(px(11.0))
+                            .font_weight(if sub == StorageSubTab::Databases { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
                             .on_click(cx.listener({
                                 let st = st_sub.clone();
                                 move |_this, _event, _window, cx| {
@@ -774,17 +906,21 @@ impl DevToolsView {
                                     cx.notify();
                                 }
                             }))
-                            .child("📁 SQLite Databases")
+                            .child("🗄️ SQLite Databases")
                     )
                     .child(
                         div()
                             .id("storage_tab_sig")
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(4.0))
+                            .px(px(12.0))
+                            .h(px(31.0))
+                            .flex_row()
+                            .items_center()
                             .cursor_pointer()
-                            .bg(if sub == StorageSubTab::Signals { rgb(0x313244) } else { rgba(0x00000000) })
-                            .text_color(if sub == StorageSubTab::Signals { rgb(0x89b4fa) } else { rgb(0xcdd6f4) })
+                            .border_b_2()
+                            .border_color(if sub == StorageSubTab::Signals { rgb(0x89b4fa) } else { rgba(0x00000000) })
+                            .text_color(if sub == StorageSubTab::Signals { rgb(0xcdd6f4) } else { rgb(0x6c7086) })
+                            .text_size(px(11.0))
+                            .font_weight(if sub == StorageSubTab::Signals { gpui::FontWeight::BOLD } else { gpui::FontWeight::NORMAL })
                             .on_click(cx.listener({
                                 let st = st_sub.clone();
                                 move |_this, _event, _window, cx| {
@@ -792,17 +928,17 @@ impl DevToolsView {
                                     cx.notify();
                                 }
                             }))
-                            .child("📁 Reactive Signals")
+                            .child("⚡ Reactive Signals")
                     )
             )
-            // Right workspace
+            // Full Width Workspace Below
             .child(
                 div()
                     .id("storage_scroll")
                     .flex_1()
-                    .h_full()
-                    .overflow_y_scroll()
-                    .p(px(16.0))
+                    .w_full()
+                    .overflow_scroll()
+                    .p(px(14.0))
                     .child(match sub {
                         StorageSubTab::LocalStorage => self.render_localstorage_view(cx).into_any_element(),
                         StorageSubTab::Databases => self.render_sqlite_view(cx).into_any_element(),
@@ -836,7 +972,7 @@ impl DevToolsView {
 
         div()
             .flex_col()
-            .gap(px(12.0))
+            .gap(px(10.0))
             .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("LocalStorage Key-Value Store"))
             .children(items.into_iter().map(|(k, v)| {
                 div()
@@ -857,8 +993,8 @@ impl DevToolsView {
 
         div()
             .flex_col()
-            .gap(px(12.0))
-            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("SQLite Database Explorer & Query Runner"))
+            .gap(px(10.0))
+            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("SQLite Database Explorer"))
             .child(
                 div()
                     .p(px(8.0))
@@ -867,9 +1003,10 @@ impl DevToolsView {
                     .border_1()
                     .border_color(rgb(0x313244))
                     .text_color(rgb(0xf9e2af))
+                    .text_size(px(12.0))
                     .child(query)
             )
-            .child(div().text_color(rgb(0x6c7086)).child("Execute queries via db.open() or run directly in the live runtime context."))
+            .child(div().text_color(rgb(0x6c7086)).text_size(px(12.0)).child("Open databases via db.open(path) to inspect tables and run queries."))
     }
 
     fn render_signals_view(&self) -> impl IntoElement {
@@ -904,7 +1041,7 @@ impl DevToolsView {
             }))
     }
 
-    // ── Tab 4: Console REPL ─────────────────────────────────────────────────────
+    // ── Tab 4: Console ──────────────────────────────────────────────────────────
     fn render_console_tab(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let logs = self.state.console_entries.read().clone();
         let st_clear = self.state.clone();
@@ -912,37 +1049,43 @@ impl DevToolsView {
         div()
             .size_full()
             .flex_col()
+            .overflow_hidden()
             .child(
                 div()
-                    .flex_row()
-                    .justify_between()
-                    .px(px(12.0))
-                    .py(px(6.0))
+                    .h(px(32.0))
+                    .w_full()
+                    .bg(rgb(0x11111b))
                     .border_b_1()
                     .border_color(rgb(0x313244))
-                    .bg(rgb(0x181825))
-                    .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0xa6adc8)).child("Console Output & REPL"))
+                    .flex_row()
+                    .justify_between()
+                    .items_center()
+                    .px(px(8.0))
+                    .child(div().text_size(px(11.0)).font_weight(gpui::FontWeight::BOLD).text_color(rgb(0xa6adc8)).child("Console Output & REPL"))
                     .child(
                         div()
                             .id("console_clear_btn")
                             .px(px(8.0))
                             .py(px(3.0))
-                            .rounded(px(4.0))
+                            .rounded(px(3.0))
                             .cursor_pointer()
                             .bg(rgb(0x313244))
+                            .text_color(rgb(0xcdd6f4))
+                            .text_size(px(11.0))
                             .on_click(cx.listener(move |_this, _event, _window, cx| {
                                 st_clear.console_entries.write().clear();
                                 cx.notify();
                             }))
-                            .child("Clear Console")
+                            .child("Clear")
                     )
             )
             .child(
                 div()
                     .id("console_scroll")
                     .flex_1()
-                    .overflow_y_scroll()
-                    .p(px(12.0))
+                    .w_full()
+                    .overflow_scroll()
+                    .p(px(10.0))
                     .flex_col()
                     .gap(px(4.0))
                     .children(logs.into_iter().map(|log| {
@@ -956,7 +1099,7 @@ impl DevToolsView {
                         div()
                             .flex_row()
                             .gap(px(8.0))
-                            .text_size(px(12.0))
+                            .text_size(px(11.0))
                             .child(div().text_color(rgb(0x6c7086)).child(log.time_str))
                             .child(div().text_color(badge_col).font_weight(gpui::FontWeight::BOLD).child(label))
                             .child(div().text_color(rgb(0xcdd6f4)).child(log.message))
@@ -980,8 +1123,8 @@ impl DevToolsView {
             .size_full()
             .flex_col()
             .p(px(16.0))
-            .gap(px(12.0))
-            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).text_size(px(16.0)).child("Performance & Engine Telemetry"))
+            .gap(px(14.0))
+            .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).text_size(px(14.0)).child("Performance & Engine Telemetry"))
             .child(
                 div()
                     .flex_row()
@@ -1000,10 +1143,10 @@ impl DevToolsView {
             .bg(rgb(0x11111b))
             .border_1()
             .border_color(rgb(0x313244))
-            .w(px(180.0))
+            .w(px(160.0))
             .flex_col()
             .child(div().text_size(px(11.0)).text_color(rgb(0xa6adc8)).child(title))
-            .child(div().text_size(px(20.0)).font_weight(gpui::FontWeight::BOLD).text_color(color).child(value))
+            .child(div().text_size(px(18.0)).font_weight(gpui::FontWeight::BOLD).text_color(color).child(value))
     }
 }
 
