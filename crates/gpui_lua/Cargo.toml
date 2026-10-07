@@ -44,8 +44,6 @@ bytes = "1"
 miniz_oxide = "0.8"
 rust-embed = "8.12"
 
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true }
 # Optional modular subsystems (can be opted out for a lightweight app)
 media = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
@@ -62,5 +60,8 @@ sha2 = { version = "0.10", optional = true }
 base64 = { version = "0.22", optional = true }
 uuid = { workspace = true, optional = true }
 libloading = { version = "0.8", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }

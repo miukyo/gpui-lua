@@ -63,8 +63,32 @@ jobs:
             libxcb-randr0-dev libxcb-xinput-dev \
             libxkbcommon-x11-dev libegl1-mesa-dev \
             libgles2-mesa-dev libglib2.0-dev libfontconfig-dev \
-            libasound2-dev libssl-dev pkg-config
+            libasound2-dev libssl-dev pkg-config \
+            libavcodec-dev libavformat-dev libavutil-dev \
+            libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
+          echo "FFMPEG_DIR=" >> $GITHUB_ENV
 
+      - name: Install macOS system dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "FFMPEG_DIR=" >> $GITHUB_ENV
+
+      - name: Install Windows FFmpeg dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ffmpegZip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          $ffmpegTarget = "$env:RUNNER_TEMP\ffmpeg"
+          curl.exe -L "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip" -o $ffmpegZip
+          Expand-Archive -Path $ffmpegZip -DestinationPath "$env:RUNNER_TEMP\ffmpeg_raw"
+          $extracted = (Get-ChildItem -Directory "$env:RUNNER_TEMP\ffmpeg_raw\ffmpeg-*")[0].FullName
+          Move-Item $extracted $ffmpegTarget
+          "FFMPEG_DIR=$ffmpegTarget" >> $env:GITHUB_ENV
+          "INCLUDE=$ffmpegTarget\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          "LIB=$ffmpegTarget\lib;$env:LIB" >> $env:GITHUB_ENV
+          "PATH=$ffmpegTarget\bin;$env:PATH" >> $env:GITHUB_ENV
       - name: Build gpui-lua binary
         run: cargo build --release -p gpui_lua --bin gpui-lua
 
@@ -77,8 +101,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/release/gpui-lua.exe -DestinationPath ${{ matrix.artifact_name }}
-
+          if (Test-Path "$env:FFMPEG_DIR\bin") {
+            Copy-Item "$env:FFMPEG_DIR\bin\*.dll" target/release/ -Force
+          }
+          Compress-Archive -Path target/release/gpui-lua.exe, target/release/*.dll -DestinationPath ${{ matrix.artifact_name }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
