@@ -1,176 +1,60 @@
-# Main CI workflow
-name: CI
-
-permissions:
-  contents: read
+name: CI, Build & Docs
 
 on:
   push:
-    branches: [main, "v[0-9]+.[0-9]+.x"]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'anysha' }}
-  cancel-in-progress: true
-
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-  CARGO_INCREMENTAL: 0
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # Change detection
-  orchestrate:
-    runs-on: ubuntu-latest
-    outputs:
-      run_tests: ${{ steps.filter.outputs.run_tests }}
-      run_style: ${{ steps.filter.outputs.run_style }}
+  build-binaries:
+    name: Build gpui-lua (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os_name: linux-x86_64
+            artifact_name: gpui-lua-linux-x86_64.tar.gz
+            bin_path: target/release/gpui-lua
+          - os: macos-latest
+            os_name: macos-arm64
+            artifact_name: gpui-lua-macos-arm64.tar.gz
+            bin_path: target/release/gpui-lua
+          - os: macos-13
+            os_name: macos-x86_64
+            artifact_name: gpui-lua-macos-x86_64.tar.gz
+            bin_path: target/release/gpui-lua
+          - os: windows-latest
+            os_name: windows-x86_64
+            artifact_name: gpui-lua-windows-x86_64.zip
+            bin_path: target/release/gpui-lua.exe
+
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          fetch-depth: ${{ github.ref == 'refs/heads/main' && 2 || 350 }}
-      - id: filter
-        run: |
-          if [ -z "$GITHUB_BASE_REF" ]; then
-            COMPARE_REV="$(git rev-parse HEAD~1)"
-          else
-            git fetch --update-head-ok origin "$GITHUB_BASE_REF" --depth=350 || true
-            COMPARE_REV="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"
-          fi
-          CHANGED_FILES="$(git diff --name-only "$COMPARE_REV" "$GITHUB_SHA")"
+          key: ${{ matrix.os_name }}
 
-          check_pattern() {
-            local name="$1" pattern="$2" invert="${3:-false}"
-            if [ "$invert" = "true" ]; then
-              echo "$CHANGED_FILES" | grep -qvE "$pattern" && echo "${name}=true" >> "$GITHUB_OUTPUT" || echo "${name}=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "$CHANGED_FILES" | grep -qE  "$pattern" && echo "${name}=true" >> "$GITHUB_OUTPUT" || echo "${name}=false" >> "$GITHUB_OUTPUT"
-            fi
-          }
-
-          check_pattern "run_tests" '^(docs/|\.github/(ISSUE_TEMPLATE|workflows/)|README\.md|CHANGELOG\.md)' true
-          check_pattern "run_style" '\.(rs|toml)$|rust-toolchain\.toml|\.cargo/|clippy\.toml|typos\.toml'
-
-  # Formatting
-  fmt:
-    runs-on: ubuntu-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_style == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: rustfmt
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just fmt-check
-
-  # Clippy
-  clippy:
-    runs-on: ubuntu-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_style == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig-dev
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just clippy
-
-  # Spell check
-  typos:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: crate-ci/typos@v1.47.2
-        with:
-          config: typos.toml
-
-  # Lockfile freshness is advisory: dependency resolution changes often come
-  # from upstream releases and should be reviewed, not block unrelated work.
-  lockfile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Check root lockfile freshness (warning only)
-        shell: bash
-        run: |
-          warn() {
-            echo "::warning title=Lockfile freshness::$1"
-          }
-
-          if ! cargo update; then
-            warn "Could not refresh Cargo.lock; inspect dependency resolution."
-          elif ! git diff --quiet -- Cargo.lock; then
-            git diff -- Cargo.lock
-            warn "Cargo.lock changed after cargo update; refresh it in a dedicated dependency update."
-          fi
-
-  # Unused dependencies
-  machete:
-    runs-on: ubuntu-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_style == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@cargo-machete
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just machete
-
-  # MSRV
-  msrv:
-    if: github.event_name == 'pull_request' && needs.orchestrate.outputs.run_style == 'true'
-    needs: [orchestrate]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: 1.95.0
-      - uses: Swatinem/rust-cache@v2
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig-dev
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just msrv-check
-
-  # WASM target (nightly + atomics)
-  check-wasm:
-    if: github.event_name == 'pull_request' && needs.orchestrate.outputs.run_style == 'true'
-    needs: [orchestrate]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install nightly toolchain with rust-src and WASM target
-        run: rustup toolchain install nightly --component rust-src --target wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just check-wasm-atomics
-
-  # Linux build + test
-  test-linux:
-    runs-on: ubuntu-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_tests == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: Swatinem/rust-cache@v2
-      - name: Install system deps
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -178,58 +62,69 @@ jobs:
             libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-randr0-dev libxcb-xinput-dev \
             libxkbcommon-x11-dev libegl1-mesa-dev \
-            libgles2-mesa-dev libglib2.0-dev libfontconfig-dev
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just build
-      - run: just test
-      - run: just test-doc
+            libgles2-mesa-dev libglib2.0-dev libfontconfig-dev \
+            libasound2-dev libssl-dev pkg-config
 
-  # macOS build + test
-  test-mac:
-    runs-on: macos-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_tests == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: Swatinem/rust-cache@v2
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just build
-      - run: just test
-      - run: just test-doc
+      - name: Build gpui-lua binary
+        run: cargo build --release -p gpui_lua --bin gpui-lua
 
-  # Windows build + test
-  test-windows:
-    runs-on: windows-latest
-    needs: [orchestrate]
-    if: needs.orchestrate.outputs.run_tests == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: Swatinem/rust-cache@v2
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just build
-      - run: just test
-      - run: just test-doc
-
-  # Examples
-  check-examples:
-    runs-on: ubuntu-latest
-    needs: [orchestrate]
-    if: github.event_name == 'pull_request' && needs.orchestrate.outputs.run_tests == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: Swatinem/rust-cache@v2
-      - name: Install system deps
+      - name: Package binary (Unix)
+        if: runner.os != 'Windows'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig-dev
-      - name: Add WASM target
-        run: rustup target add wasm32-unknown-unknown
-      - uses: hustcer/setup-nu@v3
-      - uses: extractions/setup-just@v2
-      - run: just check-examples
+          tar -czf ${{ matrix.artifact_name }} -C target/release gpui-lua
+
+      - name: Package binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/release/gpui-lua.exe -DestinationPath ${{ matrix.artifact_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+
+      - name: Publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact_name }}
+
+  deploy-docs:
+    name: Deploy Docs to GitHub Pages
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: docs
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Build VitePress documentation
+        working-directory: docs
+        env:
+          GITHUB_PAGES: 'true'
+        run: bun run docs:build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

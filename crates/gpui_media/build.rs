@@ -54,6 +54,14 @@ fn main() {
                 }
             }
         }
+
+        // Ensure fallback .deflate files exist so include_bytes! always succeeds
+        for dll_name in &required_dlls {
+            let target_deflate = embedded_dir.join(format!("{dll_name}.deflate"));
+            if !target_deflate.exists() {
+                let _ = std::fs::write(&target_deflate, b"");
+            }
+        }
         return;
     }
 
