@@ -74,7 +74,7 @@ pub trait LuaInvoker: 'static + Send + Sync {
 
 pub fn convert_node(node: LuaNode, invoker: Option<Arc<dyn LuaInvoker>>) -> AnyElement {
     let mut auto_id = 0u64;
-    convert_node_recursive(node, invoker, &mut auto_id, None)
+    convert_node_recursive(node, invoker, &mut auto_id, None, Vec::new())
 }
 
 fn length_to_definite(len: Length) -> Option<DefiniteLength> {
@@ -91,16 +91,17 @@ fn convert_node_recursive(
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
     inherited_font_family: Option<&str>,
+    current_path: Vec<usize>,
 ) -> AnyElement {
     match node {
         LuaNode::Text(text) => convert_text_node(text, inherited_font_family),
-        LuaNode::Div(div_node) => convert_div_node(div_node, invoker, auto_id, inherited_font_family),
+        LuaNode::Div(div_node) => convert_div_node(div_node, invoker, auto_id, inherited_font_family, current_path),
         LuaNode::Svg(svg_node) => convert_svg_node(svg_node, invoker.as_ref()),
         LuaNode::Img(img_node) => convert_img_node(img_node),
         LuaNode::Canvas(canvas_node) => convert_canvas_node(canvas_node, invoker),
         LuaNode::Video(video_node) => convert_video_node(video_node, invoker),
         LuaNode::Input(input_node) => convert_input_node(input_node, invoker, inherited_font_family),
-        LuaNode::Custom(custom_node) => convert_custom_node(custom_node, invoker, auto_id, inherited_font_family),
+        LuaNode::Custom(custom_node) => convert_custom_node(custom_node, invoker, auto_id, inherited_font_family, current_path),
     }
 }
 
@@ -109,12 +110,18 @@ fn convert_custom_node(
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
     inherited_font_family: Option<&str>,
+    current_path: Vec<usize>,
 ) -> AnyElement {
     let effective_ff = custom.style.font_family.as_deref().or(inherited_font_family);
     let children_elements: Vec<AnyElement> = custom
         .children
         .into_iter()
-        .map(|ch| convert_node_recursive(ch, invoker.clone(), auto_id, effective_ff))
+        .enumerate()
+        .map(|(idx, ch)| {
+            let mut child_path = current_path.clone();
+            child_path.push(idx);
+            convert_node_recursive(ch, invoker.clone(), auto_id, effective_ff, child_path)
+        })
         .collect();
 
     let cx = crate::dsl::custom::CustomElementContext {
@@ -545,6 +552,7 @@ fn convert_div_node(
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
     inherited_font_family: Option<&str>,
+    current_path: Vec<usize>,
 ) -> AnyElement {
     let mut el = if let Some(id_str) = div_node.id {
         div().id(SharedString::from(id_str))
@@ -815,10 +823,28 @@ fn convert_div_node(
     }
 
     // 7. Children
-    for child in div_node.children {
-        el = el.child(convert_node_recursive(child, invoker.clone(), auto_id, effective_ff));
+    for (idx, child) in div_node.children.into_iter().enumerate() {
+        let mut child_path = current_path.clone();
+        child_path.push(idx);
+        el = el.child(convert_node_recursive(child, invoker.clone(), auto_id, effective_ff, child_path));
     }
 
+    // Attach zero-overhead bounds tracker for DevTools inspection
+    let path_clone = current_path.clone();
+    el = el.child(
+        canvas(
+            move |_bounds, _window, _cx| (),
+            move |bounds, (), _window, _cx| {
+                if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                    dt.record_node_bounds(&path_clone, bounds);
+                }
+            },
+        )
+        .size_full()
+        .absolute()
+        .top_0()
+        .left_0(),
+    );
     // 8. Animations
     if let Some(anim) = div_node.animation {
         let mut animation = Animation::new(Duration::from_millis(anim.duration_ms));

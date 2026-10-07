@@ -49,6 +49,7 @@ pub struct LuaRuntime {
     text_system: Arc<RwLock<Option<Arc<gpui::TextSystem>>>>,
     queued_fonts: Arc<RwLock<Vec<std::borrow::Cow<'static, [u8]>>>>,
     loaded_font_names: Arc<RwLock<Vec<String>>>,
+    pub devtools: Arc<crate::devtools::DevToolsManager>,
 }
 fn init_luau_package_system(lua: &Lua) -> mlua::Result<()> {
     let pkg = lua.create_table();
@@ -122,6 +123,7 @@ impl LuaRuntime {
         let text_system: Arc<RwLock<Option<Arc<gpui::TextSystem>>>> = Arc::new(RwLock::new(None));
         let queued_fonts = Arc::new(RwLock::new(Vec::new()));
         let loaded_font_names = Arc::new(RwLock::new(Vec::new()));
+        let devtools = crate::devtools::DevToolsManager::new();
         let lua_arc = Arc::new(Mutex::new(lua));
         backend_bridge.set_lua(lua_arc.clone());
         async_engine.set_lua(lua_arc.clone());
@@ -196,7 +198,74 @@ impl LuaRuntime {
             let font_tbl = lua_guard.create_table();
             font_tbl.set("load", load_font_fn)?;
             lua_guard.globals().set("font", font_tbl)?;
-        #[cfg(feature = "media")]
+
+            // Register DevTools Lua API
+            let dt_open = devtools.clone();
+            let dt_toggle = devtools.clone();
+            let dt_close = devtools.clone();
+
+            if let Ok(ui_tbl) = lua_guard.globals().get::<mlua::Table>("ui") {
+                let dt_open_c = dt_open.clone();
+                ui_tbl.set("open_devtools", lua_guard.create_function(move |_lua, ()| {
+                    dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                })?)?;
+
+                let dt_toggle_c = dt_toggle.clone();
+                ui_tbl.set("toggle_devtools", lua_guard.create_function(move |_lua, ()| {
+                    let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
+                    dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                })?)?;
+
+                let dt_close_c = dt_close.clone();
+                ui_tbl.set("close_devtools", lua_guard.create_function(move |_lua, ()| {
+                    dt_close_c.is_open.store(false, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                })?)?;
+            }
+
+            let devtools_tbl = lua_guard.create_table();
+            let dt_open_c = dt_open.clone();
+            devtools_tbl.set("open", lua_guard.create_function(move |_lua, ()| {
+                dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })?)?;
+            let dt_toggle_c = dt_toggle.clone();
+            devtools_tbl.set("toggle", lua_guard.create_function(move |_lua, ()| {
+                let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
+                dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })?)?;
+            let dt_close_c = dt_close.clone();
+            devtools_tbl.set("close", lua_guard.create_function(move |_lua, ()| {
+                dt_close_c.is_open.store(false, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })?)?;
+            lua_guard.globals().set("devtools", devtools_tbl)?;
+
+            // Hook print to DevTools console log
+            let dt_log = devtools.clone();
+            lua_guard.globals().set("print", lua_guard.create_function(move |_lua, args: mlua::MultiValue| {
+                let mut parts = Vec::new();
+                for arg in args.iter() {
+                    match arg {
+                        mlua::Value::String(s) => parts.push(s.to_str().unwrap_or_default().to_string()),
+                        mlua::Value::Table(t) => {
+                            if let Ok(json) = crate::stdlib::json::lua_value_to_json(mlua::Value::Table(t.clone())) {
+                                parts.push(json.to_string());
+                            } else {
+                                parts.push(format!("{arg:?}"));
+                            }
+                        }
+                        other => parts.push(format!("{other:?}")),
+                    }
+                }
+                let msg = parts.join("\t");
+                println!("{msg}");
+                dt_log.state.log(crate::devtools::state::LogLevel::Info, &msg);
+                Ok(())
+            })?)?;
         {
             let _ = stdlib::register_media(&lua_guard, video.clone(), audio.clone());
             let audio_mgr_load = audio.clone();
@@ -264,6 +333,7 @@ impl LuaRuntime {
             text_system,
             queued_fonts,
             loaded_font_names,
+            devtools,
         }))
     }
 
@@ -543,6 +613,14 @@ impl LuaRuntime {
     }
 
     pub fn render_node(&self) -> Result<LuaNode, HotReloadError> {
+        let node_res = self.render_node_internal();
+        if let Ok(ref node) = node_res {
+            *self.devtools.state.element_tree.write() = Some(crate::devtools::state::ElementTreeNode::from_lua_node(node, vec![]));
+        }
+        node_res
+    }
+
+    fn render_node_internal(&self) -> Result<LuaNode, HotReloadError> {
         let lua = self.lua.lock();
 
         // 1. Try globals.App()
@@ -1191,18 +1269,53 @@ impl Render for LuaView {
             return render_error_view(&err);
         }
 
+        // Automatically open detached DevTools window if requested
+        if self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst)
+            && self.runtime.devtools.window_handle.read().is_none()
+        {
+            self.runtime.devtools.open_window(self.runtime.clone(), cx);
+        }
+
         match self.runtime.render_node() {
             Ok(node) => {
                 let has_controls = has_window_controls(&node);
                 let content = dsl::convert_node(node, Some(self.runtime.clone()));
 
                 let eng_hk = self.runtime.async_engine().clone();
-                let root_container = div()
+                let dt_hk = self.runtime.devtools.clone();
+                let rt_hk = self.runtime.clone();
+
+                let is_inspect = self.runtime.devtools.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed);
+
+                let mut root_container = div()
                     .id("gpui_lua_root")
                     .track_focus(&self.focus_handle)
                     .size_full()
+                    .relative()
                     .on_key_down(move |e, _window, cx| {
+                        let k = e.keystroke.key.as_str();
                         let m = &e.keystroke.modifiers;
+
+                        // F12 or Ctrl+Shift+I or Cmd+Opt+I: Toggle DevTools
+                        if k == "f12"
+                            || (m.control && m.shift && k.eq_ignore_ascii_case("i"))
+                            || (m.platform && m.alt && k.eq_ignore_ascii_case("i"))
+                        {
+                            dt_hk.toggle_window(rt_hk.clone(), cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Ctrl+Shift+C or Cmd+Shift+C: Toggle Inspect Cursor
+                        if (m.control && m.shift && k.eq_ignore_ascii_case("c"))
+                            || (m.platform && m.shift && k.eq_ignore_ascii_case("c"))
+                        {
+                            dt_hk.toggle_inspect_mode();
+                            rt_hk.bridge().notify();
+                            cx.stop_propagation();
+                            return;
+                        }
+
                         let mut parts = Vec::new();
                         if m.control { parts.push("ctrl"); }
                         if m.alt { parts.push("alt"); }
@@ -1213,8 +1326,42 @@ impl Render for LuaView {
                         if eng_hk.trigger_hotkey(&chord) {
                             cx.stop_propagation();
                         }
-                    })
-                    .child(content);
+                    });
+
+                if is_inspect {
+                    root_container = root_container.cursor(gpui::CursorStyle::Crosshair);
+                }
+
+                let dt_move = self.runtime.devtools.clone();
+                let bridge_move = self.runtime.bridge().clone();
+                root_container = root_container.on_mouse_move(move |e, _window, _cx| {
+                    if dt_move.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
+                        let hit = dt_move.hit_test_inspect(e.position.x, e.position.y);
+                        *dt_move.state.hovered_path.write() = hit;
+                        bridge_move.notify();
+                    }
+                });
+
+                let dt_click = self.runtime.devtools.clone();
+                let bridge_click = self.runtime.bridge().clone();
+                root_container = root_container.on_mouse_down(gpui::MouseButton::Left, move |_e, _window, cx| {
+                    if dt_click.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
+                        let hovered = dt_click.state.hovered_path.read().clone();
+                        *dt_click.state.selected_path.write() = hovered;
+                        dt_click.state.inspect_cursor_active.store(false, std::sync::atomic::Ordering::Relaxed);
+                        cx.stop_propagation();
+                        bridge_click.notify();
+                    }
+                });
+
+                root_container = root_container.child(content);
+
+                // Attach Box Model Overlay on top of root container
+                if self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::Relaxed)
+                    || self.runtime.devtools.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    root_container = root_container.child(crate::devtools::render_devtools_overlay(self.runtime.devtools.state.clone()));
+                }
                 if self.runtime.is_csd() && !has_controls {
                     div()
                         .size_full()
@@ -1529,5 +1676,36 @@ mod test_conference {
             assert(type(ui.load_font) == "function", "ui.load_font must exist")
             assert(type(font.load) == "function", "font.load must exist")
         "#).exec().expect("font API test failed");
+    }
+
+    #[test]
+    fn test_devtools_state_and_lua_bindings() {
+        let runtime = LuaRuntime::new().unwrap();
+
+        let lua = runtime.lua();
+        let lua = lua.lock();
+        lua.load(r#"
+            assert(type(ui.open_devtools) == "function", "ui.open_devtools must exist")
+            assert(type(ui.toggle_devtools) == "function", "ui.toggle_devtools must exist")
+            assert(type(devtools.open) == "function", "devtools.open must exist")
+            assert(type(devtools.toggle) == "function", "devtools.toggle must exist")
+
+            ui.open_devtools()
+        "#).exec().expect("devtools lua binding failed");
+
+        assert!(runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst));
+
+        let req_id = runtime.devtools.state.record_http_request("GET", "https://api.example.com/test", std::collections::HashMap::new(), None);
+        runtime.devtools.state.record_http_response(req_id, 200, "OK", std::collections::HashMap::new(), Some(r#"{"status":"ok"}"#.to_string()), 15);
+
+        let entries = runtime.devtools.state.network_entries.read();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].url, "https://api.example.com/test");
+        assert_eq!(entries[0].status, Some(200));
+
+        runtime.devtools.state.log(crate::devtools::state::LogLevel::Info, "DevTools initialized successfully");
+        let logs = runtime.devtools.state.console_entries.read();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].message, "DevTools initialized successfully");
     }
 }

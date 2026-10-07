@@ -326,6 +326,11 @@ impl LuaApp {
         self
     }
 
+    /// Open the detached Chromium-like DevTools window.
+    pub fn open_devtools(self) -> Self {
+        self.runtime.devtools.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+        self
+    }
     /// Load a TrueType or OpenType font from a file path or asset name.
     pub fn load_font(self, path: impl AsRef<Path>) -> Self {
         let path_str = path.as_ref().to_string_lossy().to_string();

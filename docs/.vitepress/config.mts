@@ -33,6 +33,7 @@ export default defineConfig({
             { text: 'Configuration File (gpui.toml)', link: '/guide/config-file' },
             { text: 'Single-Binary Packaging', link: '/guide/embedded-assets' },
             { text: 'Live Hot Reloading', link: '/guide/hot-reloading' },
+            { text: 'Chromium-like DevTools', link: '/guide/devtools' },
           ],
         },
         {

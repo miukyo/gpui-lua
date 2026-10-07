@@ -1048,7 +1048,31 @@ function ui.load_font(path) end
 ---@param path string
 ---@return string font_family
 function ui.add_font(path) end
+
+---Open the detached Chromium-like DevTools window (also toggleable via F12 or Ctrl+Shift+I)
+function ui.open_devtools() end
+
+---Toggle the detached DevTools window
+function ui.toggle_devtools() end
+
+---Close the detached DevTools window
+function ui.close_devtools() end
+
 --------------------------------------------------------------------------------
+-- DevTools
+--------------------------------------------------------------------------------
+
+---@class DevToolsModule
+devtools = {}
+
+---Open the detached Chromium-like DevTools window
+function devtools.open() end
+
+---Toggle the detached DevTools window
+function devtools.toggle() end
+
+---Close the detached DevTools window
+function devtools.close() end
 -- Reactive System
 --------------------------------------------------------------------------------
 

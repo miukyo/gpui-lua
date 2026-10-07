@@ -130,7 +130,7 @@ pub fn register(
         crate::tokio_runtime().spawn(async move {
             match connect_async(&url_str).await {
                 Ok((ws_stream, _)) => {
-                    // Trigger on_open
+                    crate::devtools::state::record_global_ws_opened(ws_id, &url_str);
                     if let Some(open_key) = t_on_open.lock().clone() {
                         if let Some(lua_arc) = t_lua.read().clone() {
                             let lua = lua_arc.lock();
@@ -144,11 +144,13 @@ pub fn register(
                     let (mut write, mut read) = ws_stream.split();
 
                     let write_closed = t_closed.clone();
+                    let url_ws_write = url_str.clone();
                     let write_task = tokio::spawn(async move {
                         while let Some(msg_text) = rx.recv().await {
                             if write_closed.load(Ordering::SeqCst) {
                                 break;
                             }
+                            crate::devtools::state::record_global_ws_message(&url_ws_write, true, &msg_text);
                             if write.send(Message::Text(msg_text.into())).await.is_err() {
                                 break;
                             }
@@ -162,13 +164,14 @@ pub fn register(
                     let read_on_msg = t_on_msg.clone();
                     let read_on_err = t_on_err.clone();
                     let read_on_close = t_on_close.clone();
-
+                    let url_ws_read = url_str.clone();
                     while let Some(msg_res) = read.next().await {
                         if read_closed.load(Ordering::SeqCst) {
                             break;
                         }
                         match msg_res {
                             Ok(Message::Text(txt)) => {
+                                crate::devtools::state::record_global_ws_message(&url_ws_read, false, &txt);
                                 if let Some(msg_key) = read_on_msg.lock().clone() {
                                     if let Some(lua_arc) = read_lua.read().clone() {
                                         let lua = lua_arc.lock();

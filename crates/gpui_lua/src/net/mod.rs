@@ -151,6 +151,13 @@ pub fn register(lua: &Lua, engine: HttpEngine) -> Result<()> {
 
             let method = Method::from_str(&method_str.to_uppercase()).unwrap_or(Method::GET);
 
+            let devtools_req_id = crate::devtools::state::record_global_http_request(
+                &method_str,
+                &url_str,
+                headers_map.iter().map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or_default().to_string())).collect(),
+                body_data.clone(),
+            );
+
             crate::tokio_runtime().spawn(async move {
                 let mut req = client.request(method, &url_str);
                 req = req.headers(headers_map);
@@ -187,7 +194,30 @@ pub fn register(lua: &Lua, engine: HttpEngine) -> Result<()> {
                     Err(e) => Err(e.to_string()),
                 };
 
-                // Dispatch to Lua if callback registered
+                if let Some(req_id) = devtools_req_id {
+                    match &result {
+                        Ok(data) => {
+                            crate::devtools::state::record_global_http_response(
+                                req_id,
+                                data.status,
+                                &data.status_text,
+                                data.headers.clone(),
+                                Some(data.body.clone()),
+                                data.body.len(),
+                            );
+                        }
+                        Err(e) => {
+                            crate::devtools::state::record_global_http_response(
+                                req_id,
+                                500,
+                                e,
+                                HashMap::new(),
+                                None,
+                                0,
+                            );
+                        }
+                    }
+                }
                 if let (Some(key), Some(lua_arc)) = (cb_key, lua_holder) {
                     let lua = lua_arc.lock();
                     if let Ok(func) = lua.registry_value::<Function>(&key) {

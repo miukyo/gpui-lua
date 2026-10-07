@@ -13,8 +13,10 @@ pub mod net;
 pub mod reactive;
 pub mod runtime;
 pub mod font;
+pub mod devtools;
 pub mod stdlib;
 
+pub use devtools::{DevToolsManager, DevToolsState, DevToolsView};
 pub use font::{extract_font_family_name, FontSource};
 pub use dsl::{CustomElementContext, CustomElementRenderer, register_custom_element, LuaElementBuilder, LuaNode};
 pub use hot_reload::{HotReloadError, ScriptWatcher};
