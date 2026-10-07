@@ -1896,6 +1896,7 @@ impl PlatformWindow for MacWindow {
             };
             this.native_window.setBackgroundColor_(background_color);
 
+            #[allow(deprecated)]
             let material_opt = match background_appearance {
                 WindowBackgroundAppearance::Blurred => Some(NSVisualEffectMaterial::Selection),
                 WindowBackgroundAppearance::MacosMaterial(mat) => Some(match mat {
@@ -1923,10 +1924,9 @@ impl PlatformWindow for MacWindow {
             };
 
             if let Some(material) = material_opt {
-                let blur_view: ObjcId = if let Some(view) = this.blurred_view {
+                if let Some(view) = this.blurred_view {
                     let _: () = msg_send![view, setMaterial: material];
                     let _: () = msg_send![view, setState: NSVisualEffectState::Active];
-                    view
                 } else {
                     let content_view = this.native_window.contentView();
                     let frame: Objc2NSRect = msg_send![content_view, bounds];
@@ -1944,8 +1944,7 @@ impl PlatformWindow for MacWindow {
                     ];
                     let view_ref = blur_view.autorelease();
                     this.blurred_view = Some(view_ref);
-                    view_ref
-                };
+                }
             } else if let Some(blur_view) = this.blurred_view {
                 let _: () = msg_send![blur_view, removeFromSuperview];
                 this.blurred_view = None;
