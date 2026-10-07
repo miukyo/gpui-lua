@@ -1,3 +1,4 @@
+use metal::foreign_types::ForeignType;
 use metal::MetalLayer;
 use objc2_quartz_core::{CAAutoresizingMask, CAMetalLayer as Objc2CAMetalLayer};
 
