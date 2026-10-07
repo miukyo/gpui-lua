@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/gpui_lua/docs/**'
+      - 'docs/**'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -33,11 +33,11 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        working-directory: crates/gpui_lua/docs
+        working-directory: docs
         run: bun install --frozen-lockfile || bun install
 
       - name: Build VitePress documentation
-        working-directory: crates/gpui_lua/docs
+        working-directory: docs
         env:
           GITHUB_PAGES: 'true'
         run: bun run docs:build
@@ -48,7 +48,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: crates/gpui_lua/docs/.vitepress/dist
+          path: docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         id: deployment

@@ -1,4 +1,6 @@
-<img src="assets/readme/banner.png" alt="GPUI Community Edition banner" width="100%">
+<p align="center">
+  <img src="docs/public/logo.svg" alt="GPUI.lua logo" width="240">
+</p>
 
 # GPUI.lua (GPUI-CE Fork)
 
@@ -157,7 +159,7 @@ Running `gpui-lua build` automatically embeds:
 
 ## Documentation & Links
 
-- **Documentation & Playground**: [`crates/gpui_lua/docs`](crates/gpui_lua/docs)
+- **Documentation & Playground**: [`docs`](docs)
 - **GPUI Learn Examples**: [`crates/gpui/examples/learn`](crates/gpui/examples/learn)
 - **Releases**: [github.com/miukyo/gpui-lua/releases](https://github.com/miukyo/gpui-lua/releases)
 - **Upstream GPUI-CE**: [github.com/gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce)

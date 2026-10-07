@@ -131,7 +131,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { StreamLanguage } from '@codemirror/language';
 import { lua } from '@codemirror/legacy-modes/mode/lua';
 import { oneDark } from '@codemirror/theme-one-dark';
-import counterExample from '../../../../examples/counter.lua?raw';
+import counterExample from '../../../../crates/gpui_lua/examples/counter.lua?raw';
 import { PlaygroundRuntime } from '../playground-runtime';
 import type { LogEntry, SerializedNode } from '../playground-runtime';
 import { GpuCanvasRenderer } from '../gpu-canvas';

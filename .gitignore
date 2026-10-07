@@ -2,6 +2,8 @@
 **/target
 **/cargo-target
 *.wasm
+!docs/public/ulua_web_bg.wasm
+**/node_modules/
 
 # IDEs & Editors
 .idea/       # JetBrains (CLion, IntelliJ, etc.)

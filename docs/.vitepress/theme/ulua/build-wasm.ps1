@@ -7,8 +7,8 @@ Mirrors upstream `website/wasm.sh` from https://github.com/webc-site/ulua:
 builds `ulua-web` for wasm32-unknown-unknown and runs wasm-bindgen over it, then
 installs the artifacts into:
 
-    crates/gpui_lua/docs/.vitepress/theme/ulua/   (bundled by the theme)
-    crates/gpui_lua/docs/public/                  (served at /ulua_web_bg.wasm)
+    docs/.vitepress/theme/ulua/   (bundled by the theme)
+    docs/public/                  (served at /ulua_web_bg.wasm)
 
 Requirements (installed automatically if missing):
     rustup with the wasm32-unknown-unknown target
@@ -40,7 +40,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $themeUluaDir = $PSScriptRoot
-$docsDir = (Resolve-Path (Join-Path $themeUluaDir '..' '..')).Path
+$docsDir = (Resolve-Path (Join-Path $themeUluaDir '..' '..' '..')).Path
 $publicDir = Join-Path $docsDir 'public'
 
 function Invoke-Checked {
