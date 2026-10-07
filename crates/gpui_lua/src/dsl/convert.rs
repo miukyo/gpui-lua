@@ -94,13 +94,13 @@ fn convert_node_recursive(
     current_path: Vec<usize>,
 ) -> AnyElement {
     match node {
-        LuaNode::Text(text) => convert_text_node(text, inherited_font_family),
+        LuaNode::Text(text) => convert_text_node(text, inherited_font_family, current_path, auto_id),
         LuaNode::Div(div_node) => convert_div_node(div_node, invoker, auto_id, inherited_font_family, current_path),
-        LuaNode::Svg(svg_node) => convert_svg_node(svg_node, invoker.as_ref()),
-        LuaNode::Img(img_node) => convert_img_node(img_node),
-        LuaNode::Canvas(canvas_node) => convert_canvas_node(canvas_node, invoker),
-        LuaNode::Video(video_node) => convert_video_node(video_node, invoker),
-        LuaNode::Input(input_node) => convert_input_node(input_node, invoker, inherited_font_family),
+        LuaNode::Svg(svg_node) => convert_svg_node(svg_node, invoker.as_ref(), current_path, auto_id),
+        LuaNode::Img(img_node) => convert_img_node(img_node, current_path, auto_id),
+        LuaNode::Canvas(canvas_node) => convert_canvas_node(canvas_node, invoker, current_path, auto_id),
+        LuaNode::Video(video_node) => convert_video_node(video_node, invoker, current_path, auto_id),
+        LuaNode::Input(input_node) => convert_input_node(input_node, invoker, inherited_font_family, current_path, auto_id),
         LuaNode::Custom(custom_node) => convert_custom_node(custom_node, invoker, auto_id, inherited_font_family, current_path),
     }
 }
@@ -379,6 +379,9 @@ fn apply_styles<E: Styled>(mut el: E, style: &StyleProps) -> E {
     if let Some(sw) = style.scrollbar_width {
         el = el.scrollbar_width(px(sw));
     }
+    if let Some(fs) = style.font_size {
+        el = el.text_size(px(fs));
+    }
 
     // 5. Cursors
     if style.cursor_pointer {
@@ -391,7 +394,12 @@ fn apply_styles<E: Styled>(mut el: E, style: &StyleProps) -> E {
     el
 }
 
-fn convert_svg_node(svg_node: SvgNode, invoker: Option<&Arc<dyn LuaInvoker>>) -> AnyElement {
+fn convert_svg_node(
+    svg_node: SvgNode,
+    invoker: Option<&Arc<dyn LuaInvoker>>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
+) -> AnyElement {
     let mut el = svg();
     if let Some(d) = svg_node.data {
         el = el.data(d.as_bytes());
@@ -409,26 +417,60 @@ fn convert_svg_node(svg_node: SvgNode, invoker: Option<&Arc<dyn LuaInvoker>>) ->
     if svg_node.style.text_color.is_none() {
         el = el.text_color(gpui::white());
     }
-    el = apply_styles(el, &svg_node.style);
-    el.into_any_element()
+    let el = apply_styles(el, &svg_node.style);
+
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(
+            SharedString::new_static("lua_svg_wrap"),
+            *auto_id,
+        ))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(el)
+        .into_any_element()
 }
 
-fn convert_img_node(img_node: ImgNode) -> AnyElement {
+fn convert_img_node(
+    img_node: ImgNode,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
+) -> AnyElement {
     let mut el = img(img_node.src.as_str());
     if let Some(fit) = img_node.fit {
         el = StyledImage::object_fit(el, fit.to_gpui());
     }
-    el = apply_styles(el, &img_node.style);
-    el.into_any_element()
+    let el = apply_styles(el, &img_node.style);
+
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(
+            SharedString::new_static("lua_img_wrap"),
+            *auto_id,
+        ))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(el)
+        .into_any_element()
 }
 
 fn convert_canvas_node(
     canvas_node: CanvasNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
 ) -> AnyElement {
     let paint_key = canvas_node.paint;
     let invoker = invoker.clone();
-    let mut el = canvas(
+    let el = canvas(
         move |_bounds, _window, _cx| (),
         move |bounds, _, _window, _cx| {
             if let (Some(key), Some(invoker)) = (paint_key.as_ref(), invoker.as_ref()) {
@@ -442,14 +484,30 @@ fn convert_canvas_node(
             }
         },
     );
-    el = apply_styles(el, &canvas_node.style);
-    el.into_any_element()
+    let el = apply_styles(el, &canvas_node.style);
+
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(
+            SharedString::new_static("lua_canv_wrap"),
+            *auto_id,
+        ))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(el)
+        .into_any_element()
 }
 
 #[cfg(feature = "media")]
 fn convert_video_node(
     video_node: VideoNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
 ) -> AnyElement {
     let player = invoker.as_ref().and_then(|i| i.get_video_player(&video_node.src, video_node.autoplay));
     if let Some(p) = &player {
@@ -471,7 +529,17 @@ fn convert_video_node(
                 el = el.object_fit(fit.to_gpui());
             }
             let el = apply_styles(el, &video_node.style);
-            return el.into_any_element();
+            *auto_id += 1;
+            let path_clone = current_path.clone();
+            return div()
+                .id(ElementId::NamedInteger(SharedString::new_static("lua_vid_wrap"), *auto_id))
+                .on_prepaint(move |prep, _window, _cx| {
+                    if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                        dt.record_node_bounds(&path_clone, prep.bounds);
+                    }
+                })
+                .child(el)
+                .into_any_element();
         }
     }
 
@@ -492,22 +560,54 @@ fn convert_video_node(
     if let Some(fit) = video_node.fit {
         el = StyledImage::object_fit(el, fit.to_gpui());
     }
-    el = apply_styles(el, &video_node.style);
-    el.into_any_element()
+    let el = apply_styles(el, &video_node.style);
+
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(SharedString::new_static("lua_vid_wrap"), *auto_id))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(el)
+        .into_any_element()
 }
 
 #[cfg(not(feature = "media"))]
 fn convert_video_node(
     video_node: VideoNode,
     _invoker: Option<Arc<dyn LuaInvoker>>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
 ) -> AnyElement {
     let el = div();
     let el = apply_styles(el, &video_node.style);
-    el.into_any_element()
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(SharedString::new_static("lua_vid_wrap"), *auto_id))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(el)
+        .into_any_element()
 }
 
-fn convert_text_node(text: TextNode, inherited_font_family: Option<&str>) -> AnyElement {
-    let mut el = div();
+fn convert_text_node(
+    text: TextNode,
+    inherited_font_family: Option<&str>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
+) -> AnyElement {
+    *auto_id += 1;
+    let mut el = div().id(ElementId::NamedInteger(
+        SharedString::new_static("lua_text"),
+        *auto_id,
+    ));
 
     if let Some(size) = text.size {
         el = el.text_size(px(size));
@@ -543,6 +643,13 @@ fn convert_text_node(text: TextNode, inherited_font_family: Option<&str>) -> Any
     if let Some(lines) = text.line_clamp {
         el = el.line_clamp(lines);
     }
+
+    let path_clone = current_path.clone();
+    el = el.on_prepaint(move |prep, _window, _cx| {
+        if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+            dt.record_node_bounds(&path_clone, prep.bounds);
+        }
+    });
 
     el.child(SharedString::from(text.content)).into_any_element()
 }
@@ -864,15 +971,32 @@ fn convert_input_node(
     mut input_node: InputNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
     inherited_font_family: Option<&str>,
+    current_path: Vec<usize>,
+    auto_id: &mut u64,
 ) -> AnyElement {
     if input_node.style.font_family.is_none() {
         if let Some(ff) = inherited_font_family {
             input_node.style.font_family = Some(ff.to_string());
         }
     }
-    if input_node.multiline {
+    let inner = if input_node.multiline {
         crate::input::TextareaElement::new(input_node, invoker).into_any_element()
     } else {
         crate::input::InputElement::new(input_node, invoker).into_any_element()
-    }
+    };
+
+    *auto_id += 1;
+    let path_clone = current_path.clone();
+    div()
+        .id(ElementId::NamedInteger(
+            SharedString::new_static("lua_inp_wrap"),
+            *auto_id,
+        ))
+        .on_prepaint(move |prep, _window, _cx| {
+            if let Some(ref dt) = *crate::devtools::state::ACTIVE_DEVTOOLS.read() {
+                dt.record_node_bounds(&path_clone, prep.bounds);
+            }
+        })
+        .child(inner)
+        .into_any_element()
 }

@@ -506,25 +506,66 @@ impl DevToolsView {
         if let Some(h) = s.height {
             props.push(("height", format!("{h:?}")));
         }
+
+        // Padding
+        let fmt_len = |l: &Option<crate::dsl::node::Length>| -> Option<String> {
+            l.as_ref().map(|len| match len {
+                crate::dsl::node::Length::Px(v) => format!("{v:.1}px"),
+                crate::dsl::node::Length::Percent(p) => format!("{p:.0}%"),
+                crate::dsl::node::Length::Full => "100%".to_string(),
+                crate::dsl::node::Length::Auto => "auto".to_string(),
+            })
+        };
+        if let Some(pt) = fmt_len(&s.padding.top) {
+            props.push(("padding-top", pt));
+        }
+        if let Some(pr) = fmt_len(&s.padding.right) {
+            props.push(("padding-right", pr));
+        }
+        if let Some(pb) = fmt_len(&s.padding.bottom) {
+            props.push(("padding-bottom", pb));
+        }
+        if let Some(pl) = fmt_len(&s.padding.left) {
+            props.push(("padding-left", pl));
+        }
+
+        // Margin
+        if let Some(mt) = fmt_len(&s.margin.top) {
+            props.push(("margin-top", mt));
+        }
+        if let Some(mr) = fmt_len(&s.margin.right) {
+            props.push(("margin-right", mr));
+        }
+        if let Some(mb) = fmt_len(&s.margin.bottom) {
+            props.push(("margin-bottom", mb));
+        }
+        if let Some(ml) = fmt_len(&s.margin.left) {
+            props.push(("margin-left", ml));
+        }
+
+        // Border Widths
+        if let Some(bw) = s.border_width {
+            props.push(("border-width", format!("{bw:.1}px")));
+        } else {
+            let b = &s.border_widths;
+            if let Some(t) = b.top { if t > 0.0 { props.push(("border-top-width", format!("{t:.1}px"))); } }
+            if let Some(r) = b.right { if r > 0.0 { props.push(("border-right-width", format!("{r:.1}px"))); } }
+            if let Some(bot) = b.bottom { if bot > 0.0 { props.push(("border-bottom-width", format!("{bot:.1}px"))); } }
+            if let Some(l) = b.left { if l > 0.0 { props.push(("border-left-width", format!("{l:.1}px"))); } }
+        }
+        if let Some(ref bc) = s.border_color {
+            props.push(("border-color", format!("{bc:?}")));
+        }
+
         if let Some(ref bg) = s.background {
             props.push(("background", format!("{bg:?}")));
         }
         if let Some(ref c) = s.text_color {
             props.push(("color", format!("{c:?}")));
         }
-        if let Some(ref ff) = s.font_family {
-            props.push(("font-family", ff.clone()));
+        if let Some(fs) = s.font_size {
+            props.push(("font-size", format!("{fs:.1}px")));
         }
-        if let Some(op) = s.opacity {
-            props.push(("opacity", format!("{op:.2}")));
-        }
-        if let Some(r) = s.corner_radius {
-            props.push(("border-radius", format!("{r:.1}px")));
-        }
-        if s.border_widths.top.unwrap_or(0.0) > 0.0 || s.border_widths.bottom.unwrap_or(0.0) > 0.0 {
-            props.push(("border-width", format!("{:.1}px", s.border_widths.top.unwrap_or(0.0))));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -572,46 +613,86 @@ impl DevToolsView {
                     .flex()
                     .flex_col()
                     .items_center()
+                    .gap(px(4.0))
+                    // Margin Top
                     .child(div().text_size(px(10.0)).text_color(rgb(0xf6b26b)).child(format!("margin: {:.0}", m.margin_top)))
-                    // Middle Border Box (Yellow #ffe599)
+                    // Margin Middle Row
                     .child(
                         div()
-                            .p(px(8.0))
-                            .rounded(px(4.0))
-                            .bg(rgba(0xffe59944))
-                            .border_1()
-                            .border_color(rgb(0xffe599))
                             .flex()
-                            .flex_col()
+                            .flex_row()
                             .items_center()
-                            .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("border: {:.0}", m.border_top)))
-                            // Inner Padding Box (Green #b6d7a8)
+                            .gap(px(8.0))
+                            .child(div().text_size(px(10.0)).text_color(rgb(0xf6b26b)).child(format!("{:.0}", m.margin_left)))
+                            // Middle Border Box (Yellow #ffe599)
                             .child(
                                 div()
                                     .p(px(8.0))
-                                    .rounded(px(3.0))
-                                    .bg(rgba(0xb6d7a855))
+                                    .rounded(px(4.0))
+                                    .bg(rgba(0xffe59944))
                                     .border_1()
-                                    .border_color(rgb(0xb6d7a8))
+                                    .border_color(rgb(0xffe599))
                                     .flex()
                                     .flex_col()
                                     .items_center()
-                                    .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("padding: {:.0}", m.padding_top)))
-                                    // Content Box (Blue #9fc5e8)
+                                    .gap(px(4.0))
+                                    // Border Top
+                                    .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("border: {:.0}", m.border_top)))
+                                    // Border Middle Row
                                     .child(
                                         div()
-                                            .px(px(16.0))
-                                            .py(px(8.0))
-                                            .rounded(px(2.0))
-                                            .bg(rgb(0x3b82f6))
-                                            .text_color(rgb(0x11111b))
-                                            .font_weight(gpui::FontWeight::BOLD)
-                                            .child(format!("{:.0} × {:.0}", m.content_width, m.content_height))
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(8.0))
+                                            .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("{:.0}", m.border_left)))
+                                            // Inner Padding Box (Green #b6d7a8)
+                                            .child(
+                                                div()
+                                                    .p(px(8.0))
+                                                    .rounded(px(3.0))
+                                                    .bg(rgba(0xb6d7a855))
+                                                    .border_1()
+                                                    .border_color(rgb(0xb6d7a8))
+                                                    .flex()
+                                                    .flex_col()
+                                                    .items_center()
+                                                    .gap(px(4.0))
+                                                    // Padding Top
+                                                    .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("padding: {:.0}", m.padding_top)))
+                                                    // Padding Middle Row
+                                                    .child(
+                                                        div()
+                                                            .flex()
+                                                            .flex_row()
+                                                            .items_center()
+                                                            .gap(px(8.0))
+                                                            .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("{:.0}", m.padding_left)))
+                                                            // Content Box (Blue #9fc5e8)
+                                                            .child(
+                                                                div()
+                                                                    .px(px(14.0))
+                                                                    .py(px(6.0))
+                                                                    .rounded(px(2.0))
+                                                                    .bg(rgb(0x3b82f6))
+                                                                    .text_color(rgb(0x11111b))
+                                                                    .font_weight(gpui::FontWeight::BOLD)
+                                                                    .text_size(px(11.0))
+                                                                    .child(format!("{:.0} × {:.0}", m.content_width, m.content_height))
+                                                            )
+                                                            .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("{:.0}", m.padding_right)))
+                                                    )
+                                                    // Padding Bottom
+                                                    .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("{:.0}", m.padding_bottom)))
+                                            )
+                                            .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("{:.0}", m.border_right)))
                                     )
-                                    .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("{:.0}", m.padding_bottom)))
+                                    // Border Bottom
+                                    .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("{:.0}", m.border_bottom)))
                             )
-                            .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("{:.0}", m.border_bottom)))
+                            .child(div().text_size(px(10.0)).text_color(rgb(0xf6b26b)).child(format!("{:.0}", m.margin_right)))
                     )
+                    // Margin Bottom
                     .child(div().text_size(px(10.0)).text_color(rgb(0xf6b26b)).child(format!("{:.0}", m.margin_bottom)))
             )
     }

@@ -84,9 +84,24 @@ impl ElementTreeNode {
                         _ => {}
                     }
                 }
-                if let Some(ref pad) = d.style.padding.top {
-                    if let Length::Px(p) = pad {
-                        attrs.push(("p".to_string(), format!("{p:.0}")));
+                // Distinguish all padding edges: p, px, py, pt, pr, pb, pl
+                push_edge_attrs(&mut attrs, "p", &d.style.padding);
+
+                // Distinguish all margin edges: m, mx, my, mt, mr, mb, ml
+                push_edge_attrs(&mut attrs, "m", &d.style.margin);
+
+                // Distinguish border
+                if let Some(bw) = d.style.border_width {
+                    attrs.push(("border".to_string(), format!("{bw:.0}")));
+                } else {
+                    let b = &d.style.border_widths;
+                    if b.top == b.bottom && b.left == b.right && b.top == b.left && b.top.unwrap_or(0.0) > 0.0 {
+                        attrs.push(("border".to_string(), format!("{:.0}", b.top.unwrap_or(0.0))));
+                    } else {
+                        if let Some(t) = b.top { if t > 0.0 { attrs.push(("border_t".to_string(), format!("{t:.0}"))); } }
+                        if let Some(r) = b.right { if r > 0.0 { attrs.push(("border_r".to_string(), format!("{r:.0}"))); } }
+                        if let Some(bot) = b.bottom { if bot > 0.0 { attrs.push(("border_b".to_string(), format!("{bot:.0}"))); } }
+                        if let Some(l) = b.left { if l > 0.0 { attrs.push(("border_l".to_string(), format!("{l:.0}"))); } }
                     }
                 }
                 if let Some(r) = d.style.corner_radius {
@@ -141,6 +156,7 @@ impl ElementTreeNode {
                 }
 
                 let mut style = StyleProps::default();
+                style.font_size = t.size;
                 if let Some(c) = &t.color {
                     style.text_color = Some(c.clone());
                 }
@@ -293,11 +309,12 @@ impl BoxModelMetrics {
             style.margin.left.map(|l| match l { Length::Px(v) => v, _ => 0.0 }).unwrap_or(0.0),
         );
 
+        let default_border = style.border_width.unwrap_or(0.0);
         let (bt, br, bb, bl) = (
-            style.border_widths.top.unwrap_or(0.0),
-            style.border_widths.right.unwrap_or(0.0),
-            style.border_widths.bottom.unwrap_or(0.0),
-            style.border_widths.left.unwrap_or(0.0),
+            style.border_widths.top.unwrap_or(default_border),
+            style.border_widths.right.unwrap_or(default_border),
+            style.border_widths.bottom.unwrap_or(default_border),
+            style.border_widths.left.unwrap_or(default_border),
         );
 
         let total_w: f32 = bounds.size.width.into();
@@ -321,6 +338,54 @@ impl BoxModelMetrics {
             padding_left: pl,
             content_width: content_w,
             content_height: content_h,
+        }
+    }
+}
+
+fn push_edge_attrs(attrs: &mut Vec<(String, String)>, prefix: &str, edges: &crate::dsl::node::Edges<crate::dsl::node::Length>) {
+    use crate::dsl::node::Length;
+    let t = edges.top.as_ref();
+    let r = edges.right.as_ref();
+    let b = edges.bottom.as_ref();
+    let l = edges.left.as_ref();
+
+    let fmt_len = |len: &Length| -> String {
+        match len {
+            Length::Px(v) => format!("{v:.0}"),
+            Length::Percent(p) => format!("{p:.0}%"),
+            Length::Full => "full".to_string(),
+            Length::Auto => "auto".to_string(),
+        }
+    };
+
+    // If all 4 edges are set and equal
+    if t.is_some() && t == r && t == b && t == l {
+        attrs.push((prefix.to_string(), fmt_len(t.unwrap())));
+        return;
+    }
+
+    let x_equal = l.is_some() && l == r;
+    let y_equal = t.is_some() && t == b;
+
+    if x_equal {
+        attrs.push((format!("{prefix}x"), fmt_len(l.unwrap())));
+    } else {
+        if let Some(pl) = l {
+            attrs.push((format!("{prefix}l"), fmt_len(pl)));
+        }
+        if let Some(pr) = r {
+            attrs.push((format!("{prefix}r"), fmt_len(pr)));
+        }
+    }
+
+    if y_equal {
+        attrs.push((format!("{prefix}y"), fmt_len(t.unwrap())));
+    } else {
+        if let Some(pt) = t {
+            attrs.push((format!("{prefix}t"), fmt_len(pt)));
+        }
+        if let Some(pb) = b {
+            attrs.push((format!("{prefix}b"), fmt_len(pb)));
         }
     }
 }

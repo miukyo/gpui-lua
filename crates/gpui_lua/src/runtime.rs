@@ -1708,4 +1708,76 @@ mod test_conference {
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].message, "DevTools initialized successfully");
     }
+
+    #[test]
+    fn test_devtools_edge_distinction_and_text_overlay() {
+        use crate::dsl::node::{Edges, Length, LuaNode, DivNode, TextNode, StyleProps};
+        use crate::devtools::state::{ElementTreeNode, BoxModelMetrics};
+        use gpui::{Bounds, Point, Size, px};
+
+        // 1. Text node tree conversion
+        let text_node = LuaNode::Text(TextNode {
+            content: "Hello GPUI".to_string(),
+            size: Some(16.0),
+            color: None,
+            bold: true,
+            italic: false,
+            underline: false,
+            line_through: false,
+            line_height: None,
+            font_family: None,
+            letter_spacing: None,
+            truncate: false,
+            line_clamp: None,
+        });
+        let tree_text = ElementTreeNode::from_lua_node(&text_node, vec![0, 1]);
+        assert_eq!(tree_text.tag, "text");
+        assert_eq!(tree_text.style.font_size, Some(16.0));
+        assert!(tree_text.attrs.iter().any(|(k, v)| k == "size" && v == "16"));
+        assert!(tree_text.attrs.iter().any(|(k, v)| k == "bold" && v == "true"));
+
+        // 2. Div with distinct padding edges: px=8, py=3, and margin edges: mx=5, mt=10, mb=20
+        let mut style = StyleProps::default();
+        style.padding = Edges {
+            top: Some(Length::Px(3.0)),
+            bottom: Some(Length::Px(3.0)),
+            left: Some(Length::Px(8.0)),
+            right: Some(Length::Px(8.0)),
+        };
+        style.margin = Edges {
+            top: Some(Length::Px(10.0)),
+            bottom: Some(Length::Px(20.0)),
+            left: Some(Length::Px(5.0)),
+            right: Some(Length::Px(5.0)),
+        };
+        let div_node = LuaNode::Div(DivNode {
+            id: Some("box_el".to_string()),
+            style: style.clone(),
+            ..Default::default()
+        });
+        let tree_div = ElementTreeNode::from_lua_node(&div_node, vec![0]);
+        let attr_map: std::collections::HashMap<_, _> = tree_div.attrs.into_iter().collect();
+        assert_eq!(attr_map.get("px").map(|s| s.as_str()), Some("8"));
+        assert_eq!(attr_map.get("py").map(|s| s.as_str()), Some("3"));
+        assert_eq!(attr_map.get("mx").map(|s| s.as_str()), Some("5"));
+        assert_eq!(attr_map.get("mt").map(|s| s.as_str()), Some("10"));
+        assert_eq!(attr_map.get("mb").map(|s| s.as_str()), Some("20"));
+
+        // 3. BoxModelMetrics
+        let bounds = Bounds {
+            origin: Point::new(px(10.0), px(10.0)),
+            size: Size::new(px(200.0), px(100.0)),
+        };
+        let bm = BoxModelMetrics::from_style_and_bounds(&style, bounds);
+        assert_eq!(bm.padding_top, 3.0);
+        assert_eq!(bm.padding_bottom, 3.0);
+        assert_eq!(bm.padding_left, 8.0);
+        assert_eq!(bm.padding_right, 8.0);
+        assert_eq!(bm.margin_top, 10.0);
+        assert_eq!(bm.margin_bottom, 20.0);
+        assert_eq!(bm.margin_left, 5.0);
+        assert_eq!(bm.margin_right, 5.0);
+        assert_eq!(bm.content_width, 200.0 - 16.0);
+        assert_eq!(bm.content_height, 100.0 - 6.0);
+    }
 }

@@ -242,6 +242,7 @@ pub struct StyleProps {
     pub text_left: bool,
     pub text_center: bool,
     pub text_right: bool,
+    pub font_size: Option<f32>,
     pub letter_spacing: Option<f32>,
     pub truncate: bool,
     pub line_clamp: Option<usize>,
