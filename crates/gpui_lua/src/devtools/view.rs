@@ -39,6 +39,7 @@ impl Render for DevToolsView {
             .size_full()
             .bg(rgb(0x181825))
             .text_color(rgb(0xcdd6f4))
+            .flex()
             .flex_col()
             .overflow_hidden()
             // 1. Top Horizontal Main Navbar
@@ -46,6 +47,8 @@ impl Render for DevToolsView {
             // 2. Active Tab Content (Full Remaining Viewport)
             .child(
                 div()
+                    .flex()
+                    .flex_col()
                     .flex_1()
                     .w_full()
                     .overflow_hidden()
@@ -84,12 +87,14 @@ impl DevToolsView {
             .bg(rgb(0x11111b))
             .border_b_1()
             .border_color(rgb(0x313244))
+            .flex()
             .flex_row()
             .items_center()
             .justify_between()
             .px(px(6.0))
             .child(
                 div()
+                    .flex()
                     .flex_row()
                     .items_center()
                     .gap(px(2.0))
@@ -121,6 +126,7 @@ impl DevToolsView {
                             .id(ElementId::NamedInteger(SharedString::new_static("dev_tab"), tab as u64))
                             .px(px(12.0))
                             .h(px(35.0))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .cursor_pointer()
@@ -139,6 +145,7 @@ impl DevToolsView {
             // Right Side Telemetry Badges
             .child(
                 div()
+                    .flex()
                     .flex_row()
                     .items_center()
                     .gap(px(10.0))
@@ -162,8 +169,14 @@ impl DevToolsView {
 
         let state_sub = self.state.clone();
 
+        let mut tree_rows: Vec<AnyElement> = Vec::new();
+        if let Some(ref root) = *tree_guard {
+            self.collect_tree_rows(root, selected_path.as_deref(), 0, &mut tree_rows, cx);
+        }
+
         div()
             .size_full()
+            .flex()
             .flex_row()
             .overflow_hidden()
             // Left Pane: DOM Element Hierarchy Tree
@@ -173,6 +186,7 @@ impl DevToolsView {
                     .h_full()
                     .border_r_1()
                     .border_color(rgb(0x313244))
+                    .flex()
                     .flex_col()
                     .overflow_hidden()
                     .child(
@@ -183,6 +197,7 @@ impl DevToolsView {
                             .border_b_1()
                             .border_color(rgb(0x313244))
                             .px(px(8.0))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .text_size(px(11.0))
@@ -192,18 +207,20 @@ impl DevToolsView {
                     .child(
                         div()
                             .id("elements_tree_scroll")
+                            .flex()
+                            .flex_col()
                             .flex_1()
                             .w_full()
                             .overflow_scroll()
                             .py(px(4.0))
-                            .child(if let Some(ref root) = *tree_guard {
-                                self.render_tree_node(root, selected_path.as_deref(), 0, cx)
+                            .children(if !tree_rows.is_empty() {
+                                tree_rows
                             } else {
-                                div()
+                                vec![div()
                                     .p(px(12.0))
                                     .text_color(rgb(0x6c7086))
                                     .child("<No active component rendered>")
-                                    .into_any_element()
+                                    .into_any_element()]
                             })
                     )
             )
@@ -212,6 +229,7 @@ impl DevToolsView {
                 div()
                     .w(px(380.0))
                     .h_full()
+                    .flex()
                     .flex_col()
                     .bg(rgb(0x181825))
                     .overflow_hidden()
@@ -223,6 +241,7 @@ impl DevToolsView {
                             .bg(rgb(0x11111b))
                             .border_b_1()
                             .border_color(rgb(0x313244))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .px(px(6.0))
@@ -232,6 +251,7 @@ impl DevToolsView {
                                     .id("subtab_styles")
                                     .px(px(10.0))
                                     .h(px(27.0))
+                                    .flex()
                                     .flex_row()
                                     .items_center()
                                     .cursor_pointer()
@@ -253,6 +273,7 @@ impl DevToolsView {
                                     .id("subtab_boxmodel")
                                     .px(px(10.0))
                                     .h(px(27.0))
+                                    .flex()
                                     .flex_row()
                                     .items_center()
                                     .cursor_pointer()
@@ -274,6 +295,8 @@ impl DevToolsView {
                     .child(
                         div()
                             .id("styles_scroll")
+                            .flex()
+                            .flex_col()
                             .flex_1()
                             .w_full()
                             .overflow_scroll()
@@ -294,13 +317,14 @@ impl DevToolsView {
             )
     }
 
-    fn render_tree_node(
+    fn collect_tree_rows(
         &self,
         node: &crate::devtools::state::ElementTreeNode,
         selected_path: Option<&[usize]>,
         depth: usize,
+        rows: &mut Vec<AnyElement>,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) {
         let is_selected = selected_path == Some(&node.path);
         let path_clone = node.path.clone();
         let st_select = self.state.clone();
@@ -319,6 +343,7 @@ impl DevToolsView {
 
         let mut row = div()
             .id(ElementId::NamedInteger(SharedString::new_static("tree_row"), hash_path(&node.path)))
+            .flex()
             .flex_row()
             .items_center()
             .h(px(22.0))
@@ -386,6 +411,7 @@ impl DevToolsView {
         // Opening Tag
         row = row.child(
             div()
+                .flex()
                 .flex_row()
                 .items_center()
                 .gap(px(2.0))
@@ -397,6 +423,7 @@ impl DevToolsView {
         if let Some(ref id) = node.id {
             row = row.child(
                 div()
+                    .flex()
                     .flex_row()
                     .items_center()
                     .child(div().text_color(attr_key_color).child("id="))
@@ -408,6 +435,7 @@ impl DevToolsView {
         for (k, v) in &node.attrs {
             row = row.child(
                 div()
+                    .flex()
                     .flex_row()
                     .items_center()
                     .child(div().text_color(attr_key_color).child(format!("{k}=")))
@@ -427,16 +455,18 @@ impl DevToolsView {
             row = row.child(div().text_color(bracket_color).child(">"));
         }
 
-        let mut container = div().flex_col().child(row);
+        rows.push(row.into_any_element());
 
         if has_children && !is_collapsed {
-            container = container.children(node.children.iter().map(|child| {
-                self.render_tree_node(child, selected_path, depth + 1, cx)
-            }));
+            for child in &node.children {
+                self.collect_tree_rows(child, selected_path, depth + 1, rows, cx);
+            }
 
-            // Closing Tag
+            // Closing Tag Row
             let closing_row = div()
+                .flex()
                 .flex_row()
+                .items_center()
                 .h(px(20.0))
                 .w_full()
                 .flex_shrink_0()
@@ -444,10 +474,8 @@ impl DevToolsView {
                 .text_size(px(12.0))
                 .text_color(bracket_color)
                 .child(format!("</{}>", node.tag));
-            container = container.child(closing_row);
+            rows.push(closing_row.into_any_element());
         }
-
-        container.into_any_element()
     }
 
     fn render_node_styles(&self, node: &crate::devtools::state::ElementTreeNode) -> impl IntoElement {
@@ -498,6 +526,7 @@ impl DevToolsView {
         }
 
         div()
+            .flex()
             .flex_col()
             .gap(px(4.0))
             .child(
@@ -509,6 +538,7 @@ impl DevToolsView {
             )
             .children(props.into_iter().map(|(key, val)| {
                 div()
+                    .flex()
                     .flex_row()
                     .justify_between()
                     .py(px(3.0))
@@ -526,6 +556,7 @@ impl DevToolsView {
         let m = crate::devtools::state::BoxModelMetrics::from_style_and_bounds(&node.style, bounds);
 
         div()
+            .flex()
             .flex_col()
             .items_center()
             .gap(px(12.0))
@@ -538,6 +569,7 @@ impl DevToolsView {
                     .bg(rgba(0xf6b26b44))
                     .border_1()
                     .border_color(rgb(0xf6b26b))
+                    .flex()
                     .flex_col()
                     .items_center()
                     .child(div().text_size(px(10.0)).text_color(rgb(0xf6b26b)).child(format!("margin: {:.0}", m.margin_top)))
@@ -549,6 +581,7 @@ impl DevToolsView {
                             .bg(rgba(0xffe59944))
                             .border_1()
                             .border_color(rgb(0xffe599))
+                            .flex()
                             .flex_col()
                             .items_center()
                             .child(div().text_size(px(10.0)).text_color(rgb(0xffe599)).child(format!("border: {:.0}", m.border_top)))
@@ -560,6 +593,7 @@ impl DevToolsView {
                                     .bg(rgba(0xb6d7a855))
                                     .border_1()
                                     .border_color(rgb(0xb6d7a8))
+                                    .flex()
                                     .flex_col()
                                     .items_center()
                                     .child(div().text_size(px(10.0)).text_color(rgb(0xb6d7a8)).child(format!("padding: {:.0}", m.padding_top)))
@@ -602,6 +636,7 @@ impl DevToolsView {
 
         div()
             .size_full()
+            .flex()
             .flex_col()
             .overflow_hidden()
             // Horizontal Filter Toolbar Across Top
@@ -612,12 +647,14 @@ impl DevToolsView {
                     .bg(rgb(0x11111b))
                     .border_b_1()
                     .border_color(rgb(0x313244))
+                    .flex()
                     .flex_row()
                     .items_center()
                     .justify_between()
                     .px(px(8.0))
                     .child(
                         div()
+                            .flex()
                             .flex_row()
                             .items_center()
                             .gap(px(4.0))
@@ -721,6 +758,7 @@ impl DevToolsView {
                 div()
                     .flex_1()
                     .w_full()
+                    .flex()
                     .flex_row()
                     .overflow_hidden()
                     // Table Area
@@ -731,9 +769,12 @@ impl DevToolsView {
                             .h_full()
                             .border_r_1()
                             .border_color(rgb(0x313244))
+                            .flex()
+                            .flex_col()
                             .overflow_scroll()
                             .child(
                                 div()
+                                    .flex()
                                     .flex_row()
                                     .bg(rgb(0x181825))
                                     .py(px(4.0))
@@ -760,6 +801,7 @@ impl DevToolsView {
 
                                 div()
                                     .id(ElementId::NamedInteger(SharedString::new_static("net_row"), id))
+                                    .flex()
                                     .flex_row()
                                     .items_center()
                                     .py(px(4.0))
@@ -785,15 +827,19 @@ impl DevToolsView {
                             .id("net_detail_scroll")
                             .w(px(380.0))
                             .h_full()
+                            .flex()
+                            .flex_col()
                             .overflow_scroll()
                             .p(px(12.0))
                             .child(if let Some(entry) = selected_entry {
                                 div()
+                                    .flex()
                                     .flex_col()
                                     .gap(px(10.0))
                                     .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child(format!("{} {}", entry.method, entry.url)))
                                     .child(
                                         div()
+                                            .flex()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xa6adc8)).font_weight(gpui::FontWeight::BOLD).child("Response Headers:"))
@@ -803,6 +849,7 @@ impl DevToolsView {
                                     )
                                     .child(if !entry.ws_frames.is_empty() {
                                         div()
+                                            .flex()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xa6e3a1)).font_weight(gpui::FontWeight::BOLD).child("WebSocket Frames:"))
@@ -817,6 +864,7 @@ impl DevToolsView {
                                     })
                                     .child(if let Some(stats) = entry.webrtc_stats {
                                         div()
+                                            .flex()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xf9e2af)).font_weight(gpui::FontWeight::BOLD).child("WebRTC Connection Stats:"))
@@ -827,6 +875,7 @@ impl DevToolsView {
                                     })
                                     .child(if let Some(body) = entry.response_body {
                                         div()
+                                            .flex()
                                             .flex_col()
                                             .gap(px(4.0))
                                             .child(div().text_color(rgb(0xa6adc8)).font_weight(gpui::FontWeight::BOLD).child("Response Body:"))
@@ -850,6 +899,7 @@ impl DevToolsView {
 
         div()
             .size_full()
+            .flex()
             .flex_col()
             .overflow_hidden()
             // Horizontal Storage Tab Bar Across Top
@@ -860,6 +910,7 @@ impl DevToolsView {
                     .bg(rgb(0x11111b))
                     .border_b_1()
                     .border_color(rgb(0x313244))
+                    .flex()
                     .flex_row()
                     .items_center()
                     .px(px(8.0))
@@ -869,6 +920,7 @@ impl DevToolsView {
                             .id("storage_tab_ls")
                             .px(px(12.0))
                             .h(px(31.0))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .cursor_pointer()
@@ -891,6 +943,7 @@ impl DevToolsView {
                             .id("storage_tab_db")
                             .px(px(12.0))
                             .h(px(31.0))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .cursor_pointer()
@@ -913,6 +966,7 @@ impl DevToolsView {
                             .id("storage_tab_sig")
                             .px(px(12.0))
                             .h(px(31.0))
+                            .flex()
                             .flex_row()
                             .items_center()
                             .cursor_pointer()
@@ -935,6 +989,8 @@ impl DevToolsView {
             .child(
                 div()
                     .id("storage_scroll")
+                    .flex()
+                    .flex_col()
                     .flex_1()
                     .w_full()
                     .overflow_scroll()
@@ -971,11 +1027,13 @@ impl DevToolsView {
         };
 
         div()
+            .flex()
             .flex_col()
             .gap(px(10.0))
             .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("LocalStorage Key-Value Store"))
             .children(items.into_iter().map(|(k, v)| {
                 div()
+                    .flex()
                     .flex_row()
                     .justify_between()
                     .p(px(8.0))
@@ -992,6 +1050,7 @@ impl DevToolsView {
         let query = self.state.sql_query.read().clone();
 
         div()
+            .flex()
             .flex_col()
             .gap(px(10.0))
             .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("SQLite Database Explorer"))
@@ -1014,6 +1073,7 @@ impl DevToolsView {
         let keys = store.keys();
 
         div()
+            .flex()
             .flex_col()
             .gap(px(8.0))
             .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).child("Active Reactive Signals (Hot-Reload Preserved)"))
@@ -1029,6 +1089,7 @@ impl DevToolsView {
                 };
 
                 div()
+                    .flex()
                     .flex_row()
                     .justify_between()
                     .p(px(8.0))
@@ -1048,6 +1109,7 @@ impl DevToolsView {
 
         div()
             .size_full()
+            .flex()
             .flex_col()
             .overflow_hidden()
             .child(
@@ -1057,6 +1119,7 @@ impl DevToolsView {
                     .bg(rgb(0x11111b))
                     .border_b_1()
                     .border_color(rgb(0x313244))
+                    .flex()
                     .flex_row()
                     .justify_between()
                     .items_center()
@@ -1082,11 +1145,12 @@ impl DevToolsView {
             .child(
                 div()
                     .id("console_scroll")
+                    .flex()
+                    .flex_col()
                     .flex_1()
                     .w_full()
                     .overflow_scroll()
                     .p(px(10.0))
-                    .flex_col()
                     .gap(px(4.0))
                     .children(logs.into_iter().map(|log| {
                         let (badge_col, label) = match log.level {
@@ -1097,6 +1161,7 @@ impl DevToolsView {
                         };
 
                         div()
+                            .flex()
                             .flex_row()
                             .gap(px(8.0))
                             .text_size(px(11.0))
@@ -1121,12 +1186,14 @@ impl DevToolsView {
 
         div()
             .size_full()
+            .flex()
             .flex_col()
             .p(px(16.0))
             .gap(px(14.0))
             .child(div().font_weight(gpui::FontWeight::BOLD).text_color(rgb(0x89b4fa)).text_size(px(14.0)).child("Performance & Engine Telemetry"))
             .child(
                 div()
+                    .flex()
                     .flex_row()
                     .gap(px(12.0))
                     .child(self.render_metric_card("Frame Rate", format!("{fps:.0} FPS"), rgb(0xa6e3a1)))
@@ -1144,6 +1211,7 @@ impl DevToolsView {
             .border_1()
             .border_color(rgb(0x313244))
             .w(px(160.0))
+            .flex()
             .flex_col()
             .child(div().text_size(px(11.0)).text_color(rgb(0xa6adc8)).child(title))
             .child(div().text_size(px(18.0)).font_weight(gpui::FontWeight::BOLD).text_color(color).child(value))
