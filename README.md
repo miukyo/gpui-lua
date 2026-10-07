@@ -1,150 +1,163 @@
 <img src="assets/readme/banner.png" alt="GPUI Community Edition banner" width="100%">
 
-<p align="center">
-  <a href="https://gpui-ce.github.io">Website</a> ​ · ​ <a href="crates/gpui/examples/learn">Examples</a> ​ · ​ <a href="https://discord.gg/ENGHGjrYEn">Discord</a>
-</p>
+# GPUI.lua (GPUI-CE Fork)
 
-# GPUI-CE — fork for [gpui.lua](crates/gpui_lua)
+High-performance GPU-accelerated Lua desktop runtime and single-binary packaging system powered by a dedicated fork of **GPUI-CE** and **LuaJIT 2.1**.
 
-This repository is **not** the upstream GPUI-CE community edition. It is a personal fork of it,
-maintained as the engine behind [gpui.lua](crates/gpui_lua) — a Lua UI framework built on GPUI.
+This repository is **not** the upstream GPUI-CE community edition. It is a personal fork maintained as the engine behind **[gpui.lua](crates/gpui_lua)** — adding native capabilities required for desktop applications: hardware-accelerated media playback, client-side decorations (CSD), and OS-native window vibrancy.
 
-Its goal is to give Lua apps the parts of GPUI that upstream leaves out: real media playback,
-working translucency, and native-looking windows.
+---
 
-**All gpui.lua documentation lives in [`crates/gpui_lua`](crates/gpui_lua) — start there.**
+## Two Workflows
 
-## Why this fork exists
+### 1. Standalone Lua CLI (`gpui-lua`)
+- **Zero compile toolchain needed**: No Rust toolchain or C/C++ compiler required.
+- **Download prebuilt binaries**: Directly from **[GitHub Releases](https://github.com/miukyo/gpui-ce/releases)**.
+- **Commands**:
+  - `gpui-lua init [name]` — Scaffolds project with `gpui.toml`, `main.lua`, and `gpui.d.lua` type definitions.
+  - `gpui-lua dev [script]` — Runs live with filesystem watcher and hot reloading.
+  - `gpui-lua build [script]` — Packages script, assets, and OS metadata into a single standalone binary.
 
-| Change | Why |
-| --- | --- |
-| Video & audio elements via FFmpeg | `video` / `audio` elements with hardware-accelerated decoding, so a Lua app can play media without shelling out to a browser engine |
-| Backdrop blur now works with overflow fade | The blur effect was silently dropped whenever a container also faded its overflow; the two now compose correctly |
-| macOS Metal renderer replaced by WGPU | macOS now renders through the same WGPU path as Linux and the web, instead of a separate Metal implementation. Windows still renders with DirectX |
-| CSD for custom titlebars | Client-side decorations on Windows, so `titlebar` styled windows can actually look like they belong to the app instead of the OS |
-
-Alongside these it carries the usual stream of upstream GPUI-CE fixes: rendering and path-drawing
-stability, window background handling, accessibility improvements, animation work, and more.
-
-The Rust API stays close to GPUI-CE upstream — the divergence is in features and platform
-internals, not in everyday `div()` usage.
-
-## Overview:
-
-- Web-inspired Styling & Layout
-
-  Build views with familiar elements, flex layouts, and Tailwind-style methods:
-
-  ```rust
-  div()
-      .id("some_id_123")
-      .flex()
-      .items_center()
-      .gap_2()
-      .rounded_lg()
-      .rounded_smoothing(0.8)
-      .bg(rgba(0xffffff30))
-      .backdrop_blur(px(12.0))
-      .transitions(|transitions| transitions.bg(millis(200)))
-      .hover(|style| style.bg(rgba(0xffffff60)))
-      .child("Hello, GPUI")
+### 2. Rust Backend + Lua Frontend (Hybrid)
+- For Rust applications embedding GPUI-CE and Lua.
+- Add as a Git dependency pointing to this repository:
+  ```toml
+  [dependencies]
+  gpui_lua = { git = "https://github.com/miukyo/gpui-ce" }
+  gpui = { git = "https://github.com/miukyo/gpui-ce" }
   ```
 
-  [Layout example](crates/gpui/examples/learn/layout.rs) ​ · ​ [Styling example](crates/gpui/examples/learn/styling.rs)
+---
 
-- State and events
+## Window Backgrounds & Backdrops
 
-  Use `Entity<T>` to access view and shared application state. Observe changes and call `cx.notify()` when state changes to notify observers and update the view. For a view with a `count` field:
+GPUI.lua supports hardware-accelerated and OS-native window backdrops across Windows, macOS, and Linux.
 
-  ```rust
-  div()
-      .id("counter")
-      .child(format!("Count: {}", self.count))
-      .on_click(cx.listener(|this, _event, _window, cx| {
-          this.count += 1;
-          cx.notify();
-      }))
-  ```
+### Supported Materials
 
-  [Interaction example](crates/gpui/examples/learn/interactive_elements.rs)
+- **Windows 10 & 11**:
+  - `acrylic`: Frosted glass translucent blur via DWM / `SetWindowCompositionAttribute`
+  - `mica`: Dynamic wallpaper-tinted material (Windows 11 build 22000+)
+  - `mica-alt` / `tabbed`: High-contrast tabbed Mica variant (Windows 11 build 22621+)
+  - `transparent`: Full transparent window compositing pass
+  - `opaque`: Standard solid window background
+  - *Fallback*: Windows 10 automatically falls back to Acrylic blur when Mica is configured.
+- **macOS**:
+  - Full `NSVisualEffectMaterial` vibrancy support: `sidebar`, `titlebar`, `hud`, `menu`, `popover`, `sheet`, `selection`, `tooltip`, `light`, `dark`, `ultra_dark`
+  - `transparent` and `opaque`
+- **Linux (Wayland / X11)**:
+  - `transparent`: Full compositor transparency
+  - `opaque`: Solid background
+  - `blurred`: Compositor blur where supported
 
-- Actions and keybinds
+### Configuration (`gpui.toml`)
 
-  Define typed actions and bind them to keyboard shortcuts. Call `register_keybinds` during app setup to bind Space and Backspace in the focused counter:
+```toml
+[window]
+title = "My App"
+width = 960
+height = 650
+csd = true
 
-  ```rust
-  use gpui::{App, KeyBinding, actions};
+# Per-platform backdrop settings
+[window.background]
+windows = "acrylic"       # transparent, mica, mica-alt, acrylic, opaque
+macos = "sidebar"         # any NSVisualEffectMaterial (sidebar, hud, etc.)
+linux = "transparent"     # transparent, opaque
+```
 
-  actions!(keybinds_example, [Increment, Reset]);
+### CLI Overrides
 
-  fn register_keybinds(cx: &mut App) {
-      cx.bind_keys([
-          KeyBinding::new("space", Increment, Some("Counter")),
-          KeyBinding::new("backspace", Reset, Some("Counter")),
-      ]);
-  }
-  ```
+```bash
+gpui-lua run main.lua --background acrylic
+gpui-lua run main.lua --windows-background mica-alt --macos-background sidebar
+gpui-lua run main.lua --windows-background transparent
+```
 
-  Connect the view's focus handle and action handlers:
+---
 
-  ```rust
-  div()
-      .key_context("Counter")
-      .track_focus(&self.focus_handle)
-      .on_action(cx.listener(Self::increment))
-      .on_action(cx.listener(Self::reset))
-      .child(format!("Count: {}", self.count))
-  ```
+## Rust API & Custom GPUI Elements
 
-  [Keybind example](crates/gpui/examples/learn/actions_and_keybinds.rs)
+Embed `gpui_lua` into Rust and expose native GPUI components callable directly from Lua:
 
-- Virtualized lists
+```rust
+use gpui_lua::{CustomElementContext, LuaApp};
+use gpui::{div, rgb, px, ParentElement, Styled, WindowsWindowBackground};
 
-  Use `uniform_list` for large collections of equal-height rows. GPUI requests the item ranges needed for the visible area as you scroll.
+fn main() -> anyhow::Result<()> {
+    let app = LuaApp::new("main.lua")
+        .title("Rust + GPUI.lua App")
+        .windows_background(WindowsWindowBackground::Acrylic)
+        // Register custom native GPUI component callable in Lua via ui.my_widget(props)
+        .register_element("my_widget", |cx: CustomElementContext| {
+            let label = cx.get_str("label").unwrap_or("Default");
+            div()
+                .bg(rgb(0x313244))
+                .p(px(8.0))
+                .rounded(px(6.0))
+                .child(label.to_string())
+                .children(cx.children)
+        });
 
-  ```rust
-  uniform_list("items", 10_000, |range, _window, _cx| {
-      range
-          .map(|index| {
-              div()
-                  .h(px(24.0))
-                  .child(format!("Item {index}"))
-          })
-          .collect()
+    app.run()
+}
+```
+
+In Lua:
+
+```lua
+function App()
+  return ui.div({
+    children = {
+      ui.my_widget({ label = "Native Rust Widget" }),
+      ui.my_widget():prop("label", "Chained syntax"):child(ui.text("Child"))
+    }
   })
-  .h(px(300.0))
-  ```
+end
+```
 
-  [List example](crates/gpui/examples/learn/uniform_list.rs)
+---
 
-- Custom drawing
+## Executable Resources & OS Metadata
 
-  Use `canvas` to paint directly within a view. Implement `Element` when you need control over layout and rendering, such as for a code editor or custom widget.
+Configure binary metadata and application icons in `gpui.toml`:
 
-  ```rust
-  canvas(
-      |_bounds, _window, _cx| {},
-      |bounds, _state, window, _cx| {
-          window.paint_quad(fill(bounds, rgb(0x5078f0)));
-      },
-  )
-  .size(px(80.0))
-  ```
+```toml
+[app]
+name = "My App"
+version = "1.0.0"
+product_name = "My Product"
+file_description = "High-performance desktop tool"
+company_name = "Acme Corp"
+copyright = "Copyright (c) 2026"
+identifier = "com.acme.myapp"
+icon = "assets/icon.ico"
+```
 
-  [Drawing example](crates/gpui/examples/learn/custom_drawing.rs)
+Running `gpui-lua build` automatically embeds:
+- **Windows**: `VS_VERSION_INFO` resource table & multi-resolution `.ico` icon into the `.exe`.
+- **macOS**: Standalone `.app` bundle with `Contents/Info.plist` & `Resources/{icon}.icns`.
+- **Linux**: XDG `.desktop` launcher & application icon.
 
-## Setup
-View the [setup guide](SETUP.md) for installation instructions.
+---
 
-## FAQ
-- Q: Where do I start?
-  A: [`crates/gpui_lua`](crates/gpui_lua). It has the getting-started guide, the reactive state and DSL
-  guides, CSD/window docs, media and WebRTC API references, and the CLI reference for `gpui.lua run|dev|build`.
+## Why this GPUI-CE Fork Exists
 
-- Q: I'm writing a Rust GUI app, not a Lua app.
-  A: Use it anyway — the Rust crates here are ordinary GPUI-CE crates and the examples under
-  `crates/gpui/examples/learn` still apply.
+| Feature | Why |
+| :--- | :--- |
+| **Video & Audio via FFmpeg** | Native `video` / `audio` elements with hardware-accelerated decoding without shelling out to a browser engine. |
+| **Backdrop Blur + Overflow Fade** | Composes container blur with overflow fading without dropping visual effects. |
+| **macOS WGPU Rendering** | Unifies macOS rendering with Linux and WebGPU pipelines for cross-platform consistency. Windows uses DirectX 11/12. |
+| **Client-Side Decorations (CSD)** | Custom titlebars and window control buttons matching application UI. |
+| **LuaJIT Dynamic Frontend** | Lua DSL with reactive state signals (`signal()`) and hot reloading with state preservation. |
 
-- Q: Is this the official GPUI-CE community edition?
-  A: No. Please take general questions, bug reports, and AI-policy questions to the upstream
-  [GPUI-CE project](https://github.com/gpui-ce/gpui-ce).
+*Note for pure Rust developers*: All underlying GPUI-CE crates remain standard Rust UI crates. You can write pure Rust GUI applications using the examples in `crates/gpui/examples/learn`.
+
+---
+
+## Documentation & Links
+
+- **Documentation & Playground**: [`crates/gpui_lua/docs`](crates/gpui_lua/docs)
+- **GPUI Learn Examples**: [`crates/gpui/examples/learn`](crates/gpui/examples/learn)
+- **Releases**: [github.com/miukyo/gpui-ce/releases](https://github.com/miukyo/gpui-ce/releases)
+- **Upstream GPUI-CE**: [github.com/gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce)
