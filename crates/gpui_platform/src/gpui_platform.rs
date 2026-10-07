@@ -83,18 +83,8 @@ pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
 /// Returns a new [`HeadlessRenderer`] for the current platform, if available.
 #[cfg(any(feature = "bench-support", feature = "test-support"))]
 pub fn current_headless_renderer() -> Option<Box<dyn gpui::PlatformHeadlessRenderer>> {
-    #[cfg(target_os = "macos")]
-    {
-        Some(
-            Box::new(gpui_apple::metal_renderer::MetalHeadlessRenderer::new())
-                as Box<dyn gpui::PlatformHeadlessRenderer>,
-        )
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        None
-    }
+    // Metal headless renderer removed; WGPU headless not yet available.
+    None
 }
 
 #[cfg(all(test, feature = "test-support", target_os = "macos"))]

@@ -94,7 +94,7 @@ pub mod blur {
     #[derive(Clone, Copy, Wgsl)]
     pub struct BlurUniforms {
         pub bounds: Bounds,
-        pub content_mask: Bounds,
+        pub content_mask: ContentMask,
         pub corner_radii: Corners,
         pub direction: Vec2f,
         pub standard_deviation: f32,
@@ -128,7 +128,7 @@ pub mod blur {
             texture_coordinates: vertex.unit_position,
             clip_distances: clip_distances(
                 vertex.viewport_position,
-                get!(BLUR_LOCALS).content_mask,
+                get!(BLUR_LOCALS).content_mask.bounds,
             ),
         }
     }
@@ -235,7 +235,8 @@ pub mod blur {
             )),
             get!(BLUR_LOCALS).composite_clip == BlurCompositeClip::RoundedBounds,
         );
-        blur_composite_color(input.position.xy(), coverage)
+        let fade = ContentMask::alpha(get!(BLUR_LOCALS).content_mask, input.position.xy());
+        blur_composite_color(input.position.xy(), coverage * fade)
     }
 
     #[derive(Wgsl)]
@@ -303,6 +304,7 @@ pub mod blur {
             )),
             get!(BLUR_LOCALS).composite_clip == BlurCompositeClip::RoundedBounds,
         );
-        blur_composite_color(input.position.xy(), coverage)
+        let fade = ContentMask::alpha(get!(BLUR_LOCALS).content_mask, input.position.xy());
+        blur_composite_color(input.position.xy(), coverage * fade)
     }
 }

@@ -153,6 +153,50 @@ pub trait Styled: Sized {
         self.overflow_fade(Edges::vertical(fade.into()))
     }
 
+    /// Sets the overflow fade distance on the top edge.
+    fn overflow_fade_top(mut self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.style().overflow_fade.top = Some(fade.into());
+        self
+    }
+
+    /// Sets the overflow fade distance on the bottom edge.
+    fn overflow_fade_bottom(mut self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.style().overflow_fade.bottom = Some(fade.into());
+        self
+    }
+
+    /// Sets the overflow fade distance on the left edge.
+    fn overflow_fade_left(mut self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.style().overflow_fade.left = Some(fade.into());
+        self
+    }
+
+    /// Sets the overflow fade distance on the right edge.
+    fn overflow_fade_right(mut self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.style().overflow_fade.right = Some(fade.into());
+        self
+    }
+
+    /// Sets the overflow fade distance on the top edge (shorthand).
+    fn overflow_fade_t(self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.overflow_fade_top(fade)
+    }
+
+    /// Sets the overflow fade distance on the bottom edge (shorthand).
+    fn overflow_fade_b(self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.overflow_fade_bottom(fade)
+    }
+
+    /// Sets the overflow fade distance on the left edge (shorthand).
+    fn overflow_fade_l(self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.overflow_fade_left(fade)
+    }
+
+    /// Sets the overflow fade distance on the right edge (shorthand).
+    fn overflow_fade_r(self, fade: impl Into<AbsoluteLength>) -> Self {
+        self.overflow_fade_right(fade)
+    }
+
     /// Sets the whitespace of the element.
     /// [Docs](https://tailwindcss.com/docs/whitespace)
     fn whitespace(mut self, white_space: WhiteSpace) -> Self {

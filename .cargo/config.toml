@@ -47,6 +47,26 @@ rustflags = [
   "windows_slim_errors",        # This cfg will reduce the size of `windows::core::Error` from 16 bytes to 4 bytes
   "-C",
   "target-feature=+crt-static", # This fixes the linking issue when compiling livekit on Windows
+  "-C",
+  "link-arg=/FORCE:MULTIPLE",
+  "-C",
+  "link-arg=/DELAYLOAD:avcodec-63.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:avformat-63.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:avutil-61.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:swresample-7.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:swscale-10.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:avfilter-12.dll",
+  "-C",
+  "link-arg=/DELAYLOAD:avdevice-63.dll",
+  "-C",
+  "link-arg=delayimp.lib",
+  "-C",
+  "link-arg=/STACK:8388608",
 ]
 
 # We need lld to link libwebrtc.a successfully on aarch64-linux
@@ -55,7 +75,8 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [env]
 MACOSX_DEPLOYMENT_TARGET = "10.15.7"
-
+FFMPEG_DIR = "F:/Dev/vcpkg/installed/x64-windows"
+#LIBCLANG_PATH = "C:/Users/zaid/AppData/Local/Programs/Python/Python314/Lib/site-packages/clang/native"
 # The component workspace is independently resolved, but CI runs some of its
 # checks from this repository root. Keep its unpublished GPUI CE dependencies
 # local during those checks; published component manifests still use crates.io.

@@ -2,10 +2,11 @@ pub use crate::shaders::{
     blur::BlurUniforms,
     common::{
         BlurCompositeClip as ShaderBlurCompositeClip, Bounds as ShaderBounds,
-        Corners as ShaderCorners, DownsampleMode,
+        ContentMask as ShaderContentMask, Corners as ShaderCorners, DownsampleMode,
+        Edges as ShaderEdges,
     },
 };
-use gpui::{Bounds, Corners, ScaledPixels};
+use gpui::{Bounds, ContentMask, Corners, ScaledPixels};
 use wgsl_rs::std::vec2f;
 
 pub const DOWNSAMPLE_FACTOR: u32 = 2;
@@ -33,7 +34,7 @@ pub enum FilterCompositeClip {
 #[derive(Clone, Copy)]
 pub struct FilterCompositeParameters {
     pub bounds: Bounds<ScaledPixels>,
-    pub content_mask: Bounds<ScaledPixels>,
+    pub content_mask: ContentMask<ScaledPixels>,
     pub corner_radii: Corners<ScaledPixels>,
     pub corner_smoothing: f32,
     pub blur_radius: f32,
@@ -98,7 +99,7 @@ impl BlurUniforms {
 
     pub fn composite(
         bounds: Bounds<ScaledPixels>,
-        content_mask: Bounds<ScaledPixels>,
+        content_mask: ContentMask<ScaledPixels>,
         corner_radii: Corners<ScaledPixels>,
         corner_smoothing: f32,
         opacity: f32,
@@ -207,9 +208,18 @@ fn empty_uniforms(downsample_mode: DownsampleMode) -> BlurUniforms {
         origin: vec2f(0.0, 0.0),
         size: vec2f(0.0, 0.0),
     };
+    let content_mask = ShaderContentMask {
+        bounds,
+        fade_out: ShaderEdges {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        },
+    };
     BlurUniforms {
         bounds,
-        content_mask: bounds,
+        content_mask,
         corner_radii: ShaderCorners {
             top_left: 0.0,
             top_right: 0.0,

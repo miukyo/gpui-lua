@@ -688,7 +688,7 @@ impl DirectXRenderer {
                                 &current_srv,
                                 &current_rtv,
                                 filter.bounds,
-                                filter.content_mask.bounds,
+                                filter.content_mask,
                                 filter.corner_radii,
                                 filter.corner_smoothing,
                                 filter.max_blur_radius(),
@@ -733,7 +733,7 @@ impl DirectXRenderer {
                         &current_srv,
                         &parent_rtv,
                         boundary.bounds,
-                        boundary.content_mask.bounds,
+                        boundary.content_mask,
                         boundary.corner_radii,
                         boundary.corner_smoothing,
                         boundary.max_blur_radius(),
@@ -1183,19 +1183,29 @@ impl DirectXRenderer {
         let sampler = [self.globals.sampler.clone()];
 
         for (index, surface) in surfaces.iter().enumerate() {
-            let gpui::SurfaceSource::WindowsCapture(frame) = &surface.source else {
-                log::error!("DirectX renderer cannot import this surface source");
-                anyhow::bail!("unsupported surface source");
+            let (raw_texture, key) = match &surface.source {
+                gpui::SurfaceSource::WindowsCapture(frame) => {
+                    let key = frame.texture().as_raw() as usize;
+                    let raw = frame.texture().clone().into_raw();
+                    (raw, key)
+                }
+                gpui::SurfaceSource::DirectX(directx_surface) => {
+                    let key = directx_surface.texture().as_raw() as usize;
+                    let raw = directx_surface.texture().clone().into_raw();
+                    (raw, key)
+                }
+                _ => {
+                    log::error!("DirectX renderer cannot import this surface source");
+                    anyhow::bail!("unsupported surface source");
+                }
             };
-            let key = frame.texture().as_raw() as usize;
             if let std::collections::hash_map::Entry::Vacant(entry) =
                 resources.surface_views.entry(key)
             {
                 let mut srv = None;
-                // Screen capture uses windows 0.61 while this renderer uses 0.62. COM interface
+                // Textures use windows 0.61 while this renderer uses 0.62. COM interface
                 // pointers are ABI-stable; transferring an owned clone keeps the texture alive.
-                let texture =
-                    unsafe { ID3D11Texture2D::from_raw(frame.texture().clone().into_raw()) };
+                let texture = unsafe { ID3D11Texture2D::from_raw(raw_texture) };
                 unsafe {
                     devices
                         .device
@@ -1206,7 +1216,7 @@ impl DirectXRenderer {
             let texture_srv = &resources
                 .surface_views
                 .get(&key)
-                .context("capture surface view cache insertion failed")?
+                .context("surface view cache insertion failed")?
                 .srv;
             // The surface shader declares both planes; RGBA captures bind one view to both.
             let texture_srvs = [texture_srv.clone(), texture_srv.clone()];
@@ -1305,7 +1315,7 @@ impl DirectXRenderer {
         source_srv: &Option<ID3D11ShaderResourceView>,
         target_rtv: &Option<ID3D11RenderTargetView>,
         bounds: Bounds<ScaledPixels>,
-        content_mask: Bounds<ScaledPixels>,
+        content_mask: ContentMask<ScaledPixels>,
         corner_radii: Corners<ScaledPixels>,
         corner_smoothing: f32,
         blur_radius: f32,

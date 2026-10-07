@@ -3,6 +3,21 @@
 
 mod bindings;
 
+pub mod audio;
+pub mod video;
+
+pub use audio::{
+    list_microphone_devices, AudioManager, AudioPlayer, FfmpegAudioDecoder,
+    FfmpegPacketAudioDecoder, MicrophoneCapture, MicrophoneDeviceInfo, MicrophoneOptions,
+};
+pub use video::{
+    list_camera_devices, CameraCapture, CameraDeviceInfo, CameraOptions,
+    FfmpegPacketVideoDecoder, FfmpegVideoDecoder, VideoManager, VideoPlayer,
+};
+
+#[cfg(target_os = "windows")]
+pub mod embedded_ffmpeg;
+
 #[cfg(target_os = "macos")]
 pub mod core_media {
     #![allow(non_snake_case)]

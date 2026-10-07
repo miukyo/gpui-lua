@@ -1,0 +1,20 @@
+{
+  "name": "gpui.lua-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview",
+    "wasm:build": "pwsh -NoProfile -File .vitepress/theme/ulua/build-wasm.ps1"
+  },
+  "dependencies": {
+    "vitepress": "^1.6.0",
+    "vue": "^3.5.0",
+    "codemirror": "^6.0.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/legacy-modes": "^6.5.4",
+    "@codemirror/theme-one-dark": "^6.1.2"
+  }
+}

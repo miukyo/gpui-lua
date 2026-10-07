@@ -475,7 +475,7 @@ impl<'a> FrameEncoder<'a> {
                         parent,
                         FilterCompositeParameters {
                             bounds: boundary.bounds,
-                            content_mask: boundary.content_mask.bounds,
+                            content_mask: boundary.content_mask,
                             corner_radii: boundary.corner_radii,
                             corner_smoothing: boundary.corner_smoothing,
                             blur_radius: boundary.max_blur_radius(),

@@ -1014,6 +1014,7 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         target_family = "wasm",
         target_os = "linux",
         target_os = "freebsd",
+        target_os = "windows",
         target_os = "macos"
     ))]
     fn gpu_context_info(&self) -> Option<Box<dyn std::any::Any>> {
@@ -2478,6 +2479,54 @@ pub enum WindowBackgroundAppearance {
     MicaBackdrop,
     /// The Mica Alt backdrop material, supported on Windows 11.
     MicaAltBackdrop,
+    /// The Acrylic backdrop material, supported on Windows (Desktop Acrylic / DWMSBT_TRANSIENTWINDOW).
+    Acrylic,
+    /// A macOS visual effect material corresponding to `NSVisualEffectMaterial`.
+    MacosMaterial(MacosVisualEffectMaterial),
+}
+
+/// Material constants corresponding to macOS `NSVisualEffectMaterial`.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MacosVisualEffectMaterial {
+    /// The material for a window's titlebar.
+    #[default]
+    Titlebar,
+    /// The material for selection highlights.
+    Selection,
+    /// The material for menus.
+    Menu,
+    /// The material for popovers.
+    Popover,
+    /// The material for sidebars.
+    Sidebar,
+    /// The material for header views.
+    HeaderView,
+    /// The material for in-window sheets.
+    Sheet,
+    /// The material for standard window backgrounds.
+    WindowBackground,
+    /// The material for heads-up display (HUD) windows.
+    HudWindow,
+    /// The material for full-screen UI controls.
+    FullScreenUI,
+    /// The material for tooltips.
+    ToolTip,
+    /// The material for content backgrounds.
+    ContentBackground,
+    /// The material for views under the window background.
+    UnderWindowBackground,
+    /// The material for views under the page background.
+    UnderPageBackground,
+    /// Appearance-based material.
+    AppearanceBased,
+    /// Light appearance material.
+    Light,
+    /// Dark appearance material.
+    Dark,
+    /// Medium-light appearance material.
+    MediumLight,
+    /// Ultra-dark appearance material.
+    UltraDark,
 }
 
 impl WindowBackgroundAppearance {
@@ -2508,6 +2557,8 @@ mod window_background_appearance_tests {
             WindowBackgroundAppearance::Blurred,
             WindowBackgroundAppearance::MicaBackdrop,
             WindowBackgroundAppearance::MicaAltBackdrop,
+            WindowBackgroundAppearance::Acrylic,
+            WindowBackgroundAppearance::MacosMaterial(super::MacosVisualEffectMaterial::Sidebar),
         ] {
             assert!(appearance.is_transparent());
             assert!(!appearance.is_opaque());
@@ -2529,6 +2580,46 @@ pub enum MacosWindowBackground {
     /// Transparency with the contents behind the window blurred, via the
     /// system's vibrancy materials.
     Blurred,
+    /// Specific macOS NSVisualEffectMaterial.
+    Material(MacosVisualEffectMaterial),
+    /// Titlebar visual effect material.
+    Titlebar,
+    /// Selection visual effect material.
+    Selection,
+    /// Menu visual effect material.
+    Menu,
+    /// Popover visual effect material.
+    Popover,
+    /// Sidebar visual effect material.
+    Sidebar,
+    /// HeaderView visual effect material.
+    HeaderView,
+    /// Sheet visual effect material.
+    Sheet,
+    /// WindowBackground visual effect material.
+    WindowBackground,
+    /// HudWindow visual effect material.
+    HudWindow,
+    /// FullScreenUI visual effect material.
+    FullScreenUI,
+    /// ToolTip visual effect material.
+    ToolTip,
+    /// ContentBackground visual effect material.
+    ContentBackground,
+    /// UnderWindowBackground visual effect material.
+    UnderWindowBackground,
+    /// UnderPageBackground visual effect material.
+    UnderPageBackground,
+    /// AppearanceBased visual effect material.
+    AppearanceBased,
+    /// Light visual effect material.
+    Light,
+    /// Dark visual effect material.
+    Dark,
+    /// MediumLight visual effect material.
+    MediumLight,
+    /// UltraDark visual effect material.
+    UltraDark,
 }
 
 /// The background appearance of a Windows window, set through
@@ -2545,9 +2636,17 @@ pub enum WindowsWindowBackground {
     /// Transparency with the contents behind the window blurred.
     Blurred,
     /// The Mica backdrop material, supported on Windows 11.
+    Mica,
+    /// Alias for `Mica`.
     MicaBackdrop,
     /// The Mica Alt backdrop material, supported on Windows 11.
+    MicaAlt,
+    /// Alias for `MicaAlt`.
     MicaAltBackdrop,
+    /// The Acrylic backdrop material (Desktop Acrylic on Windows 11 22H2+, Acrylic blur on older Windows).
+    Acrylic,
+    /// The Acrylic backdrop material (alias for `Acrylic`).
+    AcrylicBackdrop,
 }
 
 /// The background appearance of a Linux window, set through
@@ -2585,6 +2684,26 @@ impl From<MacosWindowBackground> for WindowBackgroundAppearance {
             MacosWindowBackground::Opaque => Self::Opaque,
             MacosWindowBackground::Transparent => Self::Transparent,
             MacosWindowBackground::Blurred => Self::Blurred,
+            MacosWindowBackground::Material(m) => Self::MacosMaterial(m),
+            MacosWindowBackground::Titlebar => Self::MacosMaterial(MacosVisualEffectMaterial::Titlebar),
+            MacosWindowBackground::Selection => Self::MacosMaterial(MacosVisualEffectMaterial::Selection),
+            MacosWindowBackground::Menu => Self::MacosMaterial(MacosVisualEffectMaterial::Menu),
+            MacosWindowBackground::Popover => Self::MacosMaterial(MacosVisualEffectMaterial::Popover),
+            MacosWindowBackground::Sidebar => Self::MacosMaterial(MacosVisualEffectMaterial::Sidebar),
+            MacosWindowBackground::HeaderView => Self::MacosMaterial(MacosVisualEffectMaterial::HeaderView),
+            MacosWindowBackground::Sheet => Self::MacosMaterial(MacosVisualEffectMaterial::Sheet),
+            MacosWindowBackground::WindowBackground => Self::MacosMaterial(MacosVisualEffectMaterial::WindowBackground),
+            MacosWindowBackground::HudWindow => Self::MacosMaterial(MacosVisualEffectMaterial::HudWindow),
+            MacosWindowBackground::FullScreenUI => Self::MacosMaterial(MacosVisualEffectMaterial::FullScreenUI),
+            MacosWindowBackground::ToolTip => Self::MacosMaterial(MacosVisualEffectMaterial::ToolTip),
+            MacosWindowBackground::ContentBackground => Self::MacosMaterial(MacosVisualEffectMaterial::ContentBackground),
+            MacosWindowBackground::UnderWindowBackground => Self::MacosMaterial(MacosVisualEffectMaterial::UnderWindowBackground),
+            MacosWindowBackground::UnderPageBackground => Self::MacosMaterial(MacosVisualEffectMaterial::UnderPageBackground),
+            MacosWindowBackground::AppearanceBased => Self::MacosMaterial(MacosVisualEffectMaterial::AppearanceBased),
+            MacosWindowBackground::Light => Self::MacosMaterial(MacosVisualEffectMaterial::Light),
+            MacosWindowBackground::Dark => Self::MacosMaterial(MacosVisualEffectMaterial::Dark),
+            MacosWindowBackground::MediumLight => Self::MacosMaterial(MacosVisualEffectMaterial::MediumLight),
+            MacosWindowBackground::UltraDark => Self::MacosMaterial(MacosVisualEffectMaterial::UltraDark),
         }
     }
 }
@@ -2596,8 +2715,9 @@ impl From<WindowsWindowBackground> for WindowBackgroundAppearance {
             WindowsWindowBackground::Opaque => Self::Opaque,
             WindowsWindowBackground::Transparent => Self::Transparent,
             WindowsWindowBackground::Blurred => Self::Blurred,
-            WindowsWindowBackground::MicaBackdrop => Self::MicaBackdrop,
-            WindowsWindowBackground::MicaAltBackdrop => Self::MicaAltBackdrop,
+            WindowsWindowBackground::Mica | WindowsWindowBackground::MicaBackdrop => Self::MicaBackdrop,
+            WindowsWindowBackground::MicaAlt | WindowsWindowBackground::MicaAltBackdrop => Self::MicaAltBackdrop,
+            WindowsWindowBackground::Acrylic | WindowsWindowBackground::AcrylicBackdrop => Self::Acrylic,
         }
     }
 }
@@ -2638,6 +2758,10 @@ mod platform_window_background_tests {
             WindowBackgroundAppearance::from(MacosWindowBackground::Blurred),
             WindowBackgroundAppearance::Blurred
         );
+        assert_eq!(
+            WindowBackgroundAppearance::from(MacosWindowBackground::Sidebar),
+            WindowBackgroundAppearance::MacosMaterial(super::MacosVisualEffectMaterial::Sidebar)
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2645,8 +2769,24 @@ mod platform_window_background_tests {
     fn windows_backgrounds_map_to_appearances() {
         use super::WindowsWindowBackground;
         assert_eq!(
+            WindowBackgroundAppearance::from(WindowsWindowBackground::Mica),
+            WindowBackgroundAppearance::MicaBackdrop
+        );
+        assert_eq!(
+            WindowBackgroundAppearance::from(WindowsWindowBackground::MicaAlt),
+            WindowBackgroundAppearance::MicaAltBackdrop
+        );
+        assert_eq!(
             WindowBackgroundAppearance::from(WindowsWindowBackground::MicaAltBackdrop),
             WindowBackgroundAppearance::MicaAltBackdrop
+        );
+        assert_eq!(
+            WindowBackgroundAppearance::from(WindowsWindowBackground::Acrylic),
+            WindowBackgroundAppearance::Acrylic
+        );
+        assert_eq!(
+            WindowBackgroundAppearance::from(WindowsWindowBackground::AcrylicBackdrop),
+            WindowBackgroundAppearance::Acrylic
         );
         assert_eq!(
             WindowBackgroundAppearance::from(WindowsWindowBackground::default()),

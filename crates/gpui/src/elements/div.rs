@@ -2496,6 +2496,7 @@ pub struct Interactivity {
     pub(crate) scroll_anchor: Option<ScrollAnchor>,
     pub(crate) scroll_offset: Option<Rc<RefCell<Point<Pixels>>>>,
     pub(crate) ongoing_scroll: Option<Rc<RefCell<OngoingScroll>>>,
+    pub(crate) smooth_scroll: Option<Rc<RefCell<SmoothScrollState>>>,
     pub(crate) group: Option<SharedString>,
     /// The base style of the element, before any modifications are applied
     /// by focus, active, etc.
@@ -2649,6 +2650,7 @@ impl Interactivity {
                     let scroll_handle_state = scroll_handle.0.borrow();
                     self.scroll_offset = Some(scroll_handle_state.offset.clone());
                     self.ongoing_scroll = Some(scroll_handle_state.ongoing_scroll.clone());
+                    self.smooth_scroll = Some(scroll_handle_state.smooth_scroll.clone());
                 } else if (self.base_style.overflow.x == Some(Overflow::Scroll)
                     || self.base_style.overflow.y == Some(Overflow::Scroll))
                     && let Some(element_state) = element_state.as_mut()
@@ -2656,6 +2658,12 @@ impl Interactivity {
                     self.scroll_offset = Some(
                         element_state
                             .scroll_offset
+                            .get_or_insert_with(Rc::default)
+                            .clone(),
+                    );
+                    self.smooth_scroll = Some(
+                        element_state
+                            .smooth_scroll
                             .get_or_insert_with(Rc::default)
                             .clone(),
                     );
@@ -2866,9 +2874,34 @@ impl Interactivity {
             let scroll_max = Point::from(padded_content_size - bounds.size)
                 .map(round_to_two_decimals)
                 .max(&Default::default());
-            // Clamp scroll offset in case scroll max is smaller now (e.g., if children
-            // were removed or the bounds became larger).
             let mut scroll_offset = scroll_offset.borrow_mut();
+
+            // Smoothly interpolate toward target offset on animation frames
+            if let Some(smooth_scroll) = self.smooth_scroll.as_ref() {
+                let mut smooth = smooth_scroll.borrow_mut();
+                if smooth.is_animating {
+                    smooth.target_offset.x = smooth.target_offset.x.clamp(-scroll_max.x, px(0.));
+                    if scroll_to_bottom {
+                        smooth.target_offset.y = -scroll_max.y;
+                    } else {
+                        smooth.target_offset.y = smooth.target_offset.y.clamp(-scroll_max.y, px(0.));
+                    }
+
+                    let diff_x = smooth.target_offset.x - scroll_offset.x;
+                    let diff_y = smooth.target_offset.y - scroll_offset.y;
+
+                    if diff_x.abs() < px(0.25) && diff_y.abs() < px(0.25) {
+                        scroll_offset.x = smooth.target_offset.x;
+                        scroll_offset.y = smooth.target_offset.y;
+                        smooth.is_animating = false;
+                    } else {
+                        const SMOOTHING_FACTOR: f32 = 0.12;
+                        scroll_offset.x += diff_x * SMOOTHING_FACTOR;
+                        scroll_offset.y += diff_y * SMOOTHING_FACTOR;
+                        window.request_animation_frame();
+                    }
+                }
+            }
 
             scroll_offset.x = scroll_offset.x.clamp(-scroll_max.x, px(0.));
             if scroll_to_bottom {
@@ -3734,6 +3767,7 @@ impl Interactivity {
         _cx: &mut App,
     ) {
         if let Some(scroll_offset) = self.scroll_offset.clone() {
+            let smooth_scroll = self.smooth_scroll.clone();
             let ongoing_scroll = self.ongoing_scroll.clone();
             let overflow = style.overflow;
             let allow_concurrent_scroll = style.allow_concurrent_scroll;
@@ -3781,10 +3815,32 @@ impl Interactivity {
                             delta_x = Pixels::ZERO;
                         }
                     }
-                    scroll_offset.y += delta_y;
-                    scroll_offset.x += delta_x;
-                    if *scroll_offset != old_scroll_offset {
-                        cx.notify(current_view);
+                    if event.delta.precise() {
+                        scroll_offset.y += delta_y;
+                        scroll_offset.x += delta_x;
+                        if let Some(smooth) = &smooth_scroll {
+                            let mut smooth = smooth.borrow_mut();
+                            smooth.target_offset = *scroll_offset;
+                            smooth.is_animating = false;
+                        }
+                        if *scroll_offset != old_scroll_offset {
+                            cx.notify(current_view);
+                        }
+                    } else if let Some(smooth) = &smooth_scroll {
+                        let mut smooth = smooth.borrow_mut();
+                        if !smooth.is_animating {
+                            smooth.target_offset = *scroll_offset;
+                        }
+                        smooth.target_offset.x += delta_x;
+                        smooth.target_offset.y += delta_y;
+                        smooth.is_animating = true;
+                        window.on_next_frame(move |_, cx| cx.notify(current_view));
+                    } else {
+                        scroll_offset.y += delta_y;
+                        scroll_offset.x += delta_x;
+                        if *scroll_offset != old_scroll_offset {
+                            cx.notify(current_view);
+                        }
                     }
                 }
             });
@@ -4094,6 +4150,7 @@ pub struct InteractiveElementState {
     pub(crate) pending_keyboard_down: Option<Rc<RefCell<Option<u64>>>>,
     pub(crate) scroll_offset: Option<Rc<RefCell<Point<Pixels>>>>,
     ongoing_scroll: Option<Rc<RefCell<OngoingScroll>>>,
+    pub(crate) smooth_scroll: Option<Rc<RefCell<SmoothScrollState>>>,
     pub(crate) active_tooltip: Option<Rc<RefCell<Option<ActiveTooltip>>>>,
     pub(crate) style_transitions: Option<Box<StyleTransitionState>>,
 }
@@ -4634,10 +4691,20 @@ impl ScrollAnchor {
     }
 }
 
+
+/// State for smooth scroll animation on stepped wheel devices.
+#[derive(Default, Debug, Clone)]
+pub struct SmoothScrollState {
+    /// Target scroll offset toward which the element animates.
+    pub target_offset: Point<Pixels>,
+    /// Whether smooth scroll animation is currently active.
+    pub is_animating: bool,
+}
 #[derive(Default, Debug)]
 struct ScrollHandleState {
     offset: Rc<RefCell<Point<Pixels>>>,
     ongoing_scroll: Rc<RefCell<OngoingScroll>>,
+    smooth_scroll: Rc<RefCell<SmoothScrollState>>,
     bounds: Bounds<Pixels>,
     max_offset: Point<Pixels>,
     child_bounds: Vec<Bounds<Pixels>>,
@@ -4798,6 +4865,11 @@ impl ScrollHandle {
                         scroll_offset.x = state.bounds.right() - bounds.right();
                     }
                 }
+                let new_offset = *scroll_offset;
+                drop(scroll_offset);
+                let mut smooth = state.smooth_scroll.borrow_mut();
+                smooth.target_offset = new_offset;
+                smooth.is_animating = false;
                 None
             }
             None => Some(active_item),
@@ -4817,6 +4889,9 @@ impl ScrollHandle {
     pub fn set_offset(&self, mut position: Point<Pixels>) {
         let state = self.0.borrow();
         *state.offset.borrow_mut() = position;
+        let mut smooth = state.smooth_scroll.borrow_mut();
+        smooth.target_offset = position;
+        smooth.is_animating = false;
     }
 
     /// Get the logical scroll top, based on a child index and a pixel offset.

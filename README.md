@@ -4,11 +4,30 @@
   <a href="https://gpui-ce.github.io">Website</a> ​ · ​ <a href="crates/gpui/examples/learn">Examples</a> ​ · ​ <a href="https://discord.gg/ENGHGjrYEn">Discord</a>
 </p>
 
-# GPUI - Community Edition
+# GPUI-CE — fork for [gpui.lua](crates/gpui_lua)
 
-GPUI-CE is a fork of Zed's [GPUI](https://gpui.rs) UI Framework.
+This repository is **not** the upstream GPUI-CE community edition. It is a personal fork of it,
+maintained as the engine behind [gpui.lua](crates/gpui_lua) — a Lua UI framework built on GPUI.
 
-It's mostly API compatible with upstream, but that is changing!
+Its goal is to give Lua apps the parts of GPUI that upstream leaves out: real media playback,
+working translucency, and native-looking windows.
+
+**All gpui.lua documentation lives in [`crates/gpui_lua`](crates/gpui_lua) — start there.**
+
+## Why this fork exists
+
+| Change | Why |
+| --- | --- |
+| Video & audio elements via FFmpeg | `video` / `audio` elements with hardware-accelerated decoding, so a Lua app can play media without shelling out to a browser engine |
+| Backdrop blur now works with overflow fade | The blur effect was silently dropped whenever a container also faded its overflow; the two now compose correctly |
+| macOS Metal renderer replaced by WGPU | macOS now renders through the same WGPU path as Linux and the web, instead of a separate Metal implementation. Windows still renders with DirectX |
+| CSD for custom titlebars | Client-side decorations on Windows, so `titlebar` styled windows can actually look like they belong to the app instead of the OS |
+
+Alongside these it carries the usual stream of upstream GPUI-CE fixes: rendering and path-drawing
+stability, window background handling, accessibility improvements, animation work, and more.
+
+The Rust API stays close to GPUI-CE upstream — the divergence is in features and platform
+internals, not in everyday `div()` usage.
 
 ## Overview:
 
@@ -118,11 +137,14 @@ It's mostly API compatible with upstream, but that is changing!
 View the [setup guide](SETUP.md) for installation instructions.
 
 ## FAQ
-- Q: What is our AI Policy?
-  A: We follow the [Rust Foundation's internal AI usage policy](https://rustfoundation.org/policy/internal-ai-usage-policy/). GPUI-CE is a framework "Made by Humans". We value community participation and take time to understand contributors' intentions and offer guidance.
+- Q: Where do I start?
+  A: [`crates/gpui_lua`](crates/gpui_lua). It has the getting-started guide, the reactive state and DSL
+  guides, CSD/window docs, media and WebRTC API references, and the CLI reference for `gpui.lua run|dev|build`.
 
-- Q: What is the long-term goal of GPUI-CE?
-  A: To become the go-to Rust GUI library for applications of any size. We want reusable components, native platform integration, and control over performance. We build on Zed's work and continue to bring in upstream fixes.
+- Q: I'm writing a Rust GUI app, not a Lua app.
+  A: Use it anyway — the Rust crates here are ordinary GPUI-CE crates and the examples under
+  `crates/gpui/examples/learn` still apply.
 
-- Q: How does the project compare to other forks in the ecosystem?
-  A: Other forks often develop around the applications that use them. GPUI-CE aims to support a broad range of applications, with a focus on stability.
+- Q: Is this the official GPUI-CE community edition?
+  A: No. Please take general questions, bug reports, and AI-policy questions to the upstream
+  [GPUI-CE project](https://github.com/gpui-ce/gpui-ce).

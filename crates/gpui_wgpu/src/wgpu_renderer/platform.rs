@@ -102,7 +102,6 @@ impl WgpuRenderer {
             atlas,
         )
     }
-
     #[cfg(target_family = "wasm")]
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new_from_surface(

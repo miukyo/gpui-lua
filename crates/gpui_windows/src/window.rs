@@ -96,7 +96,7 @@ pub(crate) struct WindowsWindowInner {
     pub(crate) state: WindowsWindowState,
     system_settings: WindowsSystemSettings,
     pub(crate) handle: AnyWindowHandle,
-    pub(crate) hide_title_bar: bool,
+    pub(crate) hide_title_bar: Cell<bool>,
     pub(crate) is_movable: bool,
     pub(crate) is_resizable: bool,
     pub(crate) is_minimizable: bool,
@@ -268,7 +268,7 @@ impl WindowsWindowInner {
             drop_target_helper: context.drop_target_helper.clone(),
             state,
             handle: context.handle,
-            hide_title_bar: context.hide_title_bar,
+            hide_title_bar: Cell::new(context.hide_title_bar),
             is_movable: context.is_movable,
             is_resizable: context.is_resizable,
             is_minimizable: context.is_minimizable,
@@ -892,13 +892,36 @@ impl PlatformWindow for WindowsWindow {
                 set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
             }
             WindowBackgroundAppearance::MicaBackdrop => {
-                // DWMSBT_MAINWINDOW => MicaBase
-                dwm_set_window_composition_attribute(hwnd, 2);
+                let mut version = unsafe { std::mem::zeroed() };
+                let status =
+                    unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
+                if status.is_ok() && version.dwBuildNumber >= 22621 {
+                    dwm_set_window_composition_attribute(hwnd, 2);
+                } else {
+                    set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
+                }
             }
             WindowBackgroundAppearance::MicaAltBackdrop => {
-                // DWMSBT_TABBEDWINDOW => MicaAlt
-                dwm_set_window_composition_attribute(hwnd, 4);
+                let mut version = unsafe { std::mem::zeroed() };
+                let status =
+                    unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
+                if status.is_ok() && version.dwBuildNumber >= 22621 {
+                    dwm_set_window_composition_attribute(hwnd, 4);
+                } else {
+                    set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
+                }
             }
+            WindowBackgroundAppearance::Acrylic => {
+                let mut version = unsafe { std::mem::zeroed() };
+                let status =
+                    unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
+                if status.is_ok() && version.dwBuildNumber >= 22621 {
+                    dwm_set_window_composition_attribute(hwnd, 3);
+                } else {
+                    set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
+                }
+            }
+            WindowBackgroundAppearance::MacosMaterial(_) => {}
         }
     }
 
@@ -1047,6 +1070,13 @@ impl PlatformWindow for WindowsWindow {
             .callbacks
             .appearance_changed
             .set(Some(callback));
+    }
+    fn request_decorations(&self, decorations: WindowDecorations) {
+        let hide = matches!(decorations, WindowDecorations::Client);
+        if self.0.hide_title_bar.get() != hide {
+            self.0.hide_title_bar.set(hide);
+            crate::events::notify_frame_changed(self.0.hwnd);
+        }
     }
 
     fn draw(&self, scene: &Scene) {

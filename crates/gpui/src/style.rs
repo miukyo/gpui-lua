@@ -793,58 +793,56 @@ impl Style {
         bounds: Bounds<Pixels>,
         rem_size: Pixels,
     ) -> Option<ContentMask<Pixels>> {
-        match self.overflow {
-            Point {
-                x: Overflow::Visible,
-                y: Overflow::Visible,
-            } => None,
-            _ => {
-                let mut min = bounds.origin;
-                let mut max = bounds.bottom_right();
+        let has_fade = self.overflow_fade != Edges::default();
+        if !has_fade
+            && self.overflow.x == Overflow::Visible
+            && self.overflow.y == Overflow::Visible
+        {
+            return None;
+        }
 
-                if self
-                    .border_color
-                    .is_some_and(|background| !background.is_transparent())
-                {
-                    min.x += self.border_widths.left.to_pixels(rem_size);
-                    max.x -= self.border_widths.right.to_pixels(rem_size);
-                    min.y += self.border_widths.top.to_pixels(rem_size);
-                    max.y -= self.border_widths.bottom.to_pixels(rem_size);
-                }
+        let fade_out = self.overflow_fade.to_pixels(rem_size);
+        let mut min = bounds.origin;
+        let mut max = bounds.bottom_right();
+
+        if self
+            .border_color
+            .is_some_and(|background| !background.is_transparent())
+        {
+            if fade_out.left == Pixels::ZERO {
+                min.x += self.border_widths.left.to_pixels(rem_size);
+            }
+            if fade_out.right == Pixels::ZERO {
+                max.x -= self.border_widths.right.to_pixels(rem_size);
+            }
+            if fade_out.top == Pixels::ZERO {
+                min.y += self.border_widths.top.to_pixels(rem_size);
+            }
+            if fade_out.bottom == Pixels::ZERO {
+                max.y -= self.border_widths.bottom.to_pixels(rem_size);
+            }
+        }
 
                 let bounds = match (
                     self.overflow.x == Overflow::Visible,
                     self.overflow.y == Overflow::Visible,
                 ) {
-                    // x and y both visible
-                    (true, true) => return None,
+                    // x and y both visible, but has_fade is true
+                    (true, true) => Bounds::from_corners(min, max),
                     // x visible, y hidden
                     (true, false) => Bounds::from_corners(
-                        point(min.x, bounds.origin.y),
-                        point(max.x, bounds.bottom_right().y),
-                    ),
-                    // x hidden, y visible
-                    (false, true) => Bounds::from_corners(
                         point(bounds.origin.x, min.y),
                         point(bounds.bottom_right().x, max.y),
                     ),
-                    // both hidden
+                    // x hidden, y visible
+                    (false, true) => Bounds::from_corners(
+                        point(min.x, bounds.origin.y),
+                        point(max.x, bounds.bottom_right().y),
+                    ),
                     (false, false) => Bounds::from_corners(min, max),
                 };
 
-                let mut fade_out = self.overflow_fade.to_pixels(rem_size);
-                if self.overflow.x == Overflow::Visible {
-                    fade_out.left = Pixels::ZERO;
-                    fade_out.right = Pixels::ZERO;
-                }
-                if self.overflow.y == Overflow::Visible {
-                    fade_out.top = Pixels::ZERO;
-                    fade_out.bottom = Pixels::ZERO;
-                }
-
-                Some(ContentMask { bounds, fade_out })
-            }
-        }
+        Some(ContentMask { bounds, fade_out })
     }
 
     /// Get the content mask for a container that always clips and scrolls
@@ -905,17 +903,39 @@ impl Style {
             window.paint_quad_with_corner_smoothing(ring, corner_smoothing);
         }
 
+        let has_fade = self.overflow_fade != Edges::default();
+        let fade_mask = if has_fade {
+            Some(ContentMask {
+                bounds,
+                fade_out: self.overflow_fade.to_pixels(rem_size),
+            })
+        } else {
+            None
+        };
+
         // Blur the content behind this element before its (typically translucent) background
         // is painted on top, so the background tints the frosted backdrop (CSS `backdrop-filter`).
         if !self.backdrop_filter.is_empty() {
-            window.paint_backdrop_filter_with_corner_smoothing(
-                bounds,
-                corner_radii,
-                corner_smoothing,
-                &self.backdrop_filter,
-            );
+            if has_fade {
+                window.with_content_mask(fade_mask, |window| {
+                    window.paint_backdrop_filter_with_corner_smoothing(
+                        bounds,
+                        corner_radii,
+                        corner_smoothing,
+                        &self.backdrop_filter,
+                    );
+                });
+            } else {
+                window.paint_backdrop_filter_with_corner_smoothing(
+                    bounds,
+                    corner_radii,
+                    corner_smoothing,
+                    &self.backdrop_filter,
+                );
+            }
         }
 
+        let overflow_mask = self.overflow_mask(bounds, rem_size);
         // The element's own box — background, inset shadows, children, and border — painted as a
         // unit. A `filter` (CSS `filter`) wraps this whole unit so the renderer blurs the element
         // and its children together as one group; without a filter it paints directly.
@@ -923,19 +943,22 @@ impl Style {
             let background_color = self.background.as_ref().and_then(Fill::color);
             if background_color.is_some_and(|color| !color.is_transparent()) {
                 let background_color = background_color.unwrap_or_default();
-                window.paint_quad_with_corner_smoothing(
-                    quad(
-                        bounds,
-                        corner_radii,
-                        background_color,
-                        Edges::default(),
-                        background_color.opacity(0.),
-                        self.border_style,
-                    ),
-                    corner_smoothing,
+                let bg_quad = quad(
+                    bounds,
+                    corner_radii,
+                    background_color,
+                    Edges::default(),
+                    background_color.opacity(0.),
+                    self.border_style,
                 );
+                if has_fade {
+                    window.with_content_mask(fade_mask, |window| {
+                        window.paint_quad_with_corner_smoothing(bg_quad, corner_smoothing);
+                    });
+                } else {
+                    window.paint_quad_with_corner_smoothing(bg_quad, corner_smoothing);
+                }
             }
-
             if let Some(ring) = self.inset_ring.inset_shadow(current_color) {
                 window.paint_inset_shadows_with_corner_smoothing(
                     bounds,
@@ -951,40 +974,53 @@ impl Style {
                 &self.box_shadow,
             );
 
-            continuation(window, cx);
-
+            if let Some(mask) = overflow_mask {
+                window.with_content_mask(Some(mask), |window| {
+                    continuation(window, cx);
+                });
+            } else {
+                continuation(window, cx);
+            }
             if self.is_border_visible() {
                 let border_widths = self.border_widths.to_pixels(rem_size);
                 let border_color = self.border_color.unwrap_or_default();
-                window.paint_quad_with_corner_smoothing(
-                    quad(
-                        bounds,
-                        corner_radii,
-                        border_color.opacity(0.),
-                        border_widths,
-                        border_color,
-                        self.border_style,
-                    )
-                    .border_dashed_length(self.border_dashed_length)
-                    .border_dashed_gap(self.border_dashed_gap),
-                    corner_smoothing,
-                );
+                let border_quad = quad(
+                    bounds,
+                    corner_radii,
+                    border_color.opacity(0.),
+                    border_widths,
+                    border_color,
+                    self.border_style,
+                )
+                .border_dashed_length(self.border_dashed_length)
+                .border_dashed_gap(self.border_dashed_gap);
+
+                if has_fade {
+                    window.with_content_mask(fade_mask, |window| {
+                        window.paint_quad_with_corner_smoothing(border_quad, corner_smoothing);
+                    });
+                } else {
+                    window.paint_quad_with_corner_smoothing(
+                        border_quad,
+                        corner_smoothing,
+                    );
+                }
             }
         };
 
-        if self.filter.is_empty() {
-            paint_box(window, cx);
-        } else {
-            window.with_filter_layer_with_corner_smoothing(
-                bounds,
-                corner_radii,
-                corner_smoothing,
-                &self.filter,
-                |window| {
-                    paint_box(window, cx);
-                },
-            );
-        }
+            if self.filter.is_empty() {
+                paint_box(window, cx);
+            } else {
+                window.with_filter_layer_with_corner_smoothing(
+                    bounds,
+                    corner_radii,
+                    corner_smoothing,
+                    &self.filter,
+                    |window| {
+                        paint_box(window, cx);
+                    },
+                );
+            }
 
         #[cfg(debug_assertions)]
         if self.debug_below {
@@ -1875,5 +1911,24 @@ mod tests {
         assert_eq!(inset.color, gradient);
         assert!(inset.inset);
         assert_eq!(style.ring, RingStyle::default());
+    }
+
+    #[test]
+    fn overflow_fade_mask_aligns_to_outer_bounds_on_fading_edges() {
+        let mut style = Style::default();
+        style.overflow.y = crate::Overflow::Hidden;
+        style.border_widths = crate::Edges::all(crate::AbsoluteLength::Pixels(px(2.0)));
+        style.border_color = Some(crate::black().into());
+        style.overflow_fade.top = crate::AbsoluteLength::Pixels(px(40.0));
+
+        let bounds = crate::Bounds::new(crate::point(px(10.0), px(20.0)), crate::size(px(100.0), px(200.0)));
+        let mask = style.overflow_mask(bounds, px(16.0)).unwrap();
+
+        // Top edge has fade, so it must start at outer bounds (y = 20), not inset by border (y = 22)
+        assert_eq!(mask.bounds.origin.y, px(20.0));
+        assert_eq!(mask.fade_out.top, px(40.0));
+
+        // Bottom edge has no fade, so it insets by border (200 - 2 = 198)
+        assert_eq!(mask.bounds.size.height, px(198.0));
     }
 }

@@ -4,7 +4,7 @@ version = "0.2.2"
 edition = "2024"
 license = "Apache-2.0"
 publish = true
-description = "macOS CoreMedia/CoreVideo bindings for gpui-ce (vendored from Zed)."
+description = "FFmpeg-backed video and audio decoding engine for gpui-ce."
 
 [lib]
 name = "media"
@@ -12,7 +12,19 @@ path = "src/media.rs"
 doctest = false
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = { workspace = true }
+log = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+image = { workspace = true }
+gpui = { workspace = true }
+ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling"] }
+cpal = "0.15.3"
+[target.'cfg(target_os = "windows")'.dependencies]
+miniz_oxide = "0.8"
+windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
+ctor = "1.0"
+windows-061 = { workspace = true, features = ["Win32_Graphics_Direct3D11"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation.workspace = true
@@ -23,3 +35,4 @@ objc.workspace = true
 
 [build-dependencies]
 bindgen = "0.72"
+miniz_oxide = "0.8"

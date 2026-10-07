@@ -677,7 +677,6 @@ impl Platform for MacPlatform {
         Some(MacWindow::ordered_windows())
     }
 
-    #[cfg(feature = "wgpu")]
     fn set_gpu_requirements(&self, requirements: Box<dyn std::any::Any>) {
         if let Ok(reqs) = requirements.downcast::<gpui_wgpu::WgpuDeviceRequirements>() {
             self.0.lock().renderer_context.set_requirements(*reqs);

@@ -1896,25 +1896,59 @@ impl PlatformWindow for MacWindow {
             };
             this.native_window.setBackgroundColor_(background_color);
 
-            if background_appearance != WindowBackgroundAppearance::Blurred {
-                if let Some(blur_view) = this.blurred_view {
-                    let _: () = msg_send![blur_view, removeFromSuperview];
-                    this.blurred_view = None;
-                }
-            } else if this.blurred_view.is_none() {
-                let content_view = this.native_window.contentView();
-                let frame: Objc2NSRect = msg_send![content_view, bounds];
-                let mut blur_view: ObjcId = msg_send![&*BLURRED_VIEW_CLASS, alloc];
-                blur_view = msg_send![blur_view, initWithFrame: frame];
-                blur_view.setAutoresizingMask_(VIEW_WIDTH_SIZABLE | VIEW_HEIGHT_SIZABLE);
+            let material_opt = match background_appearance {
+                WindowBackgroundAppearance::Blurred => Some(NSVisualEffectMaterial::Selection),
+                WindowBackgroundAppearance::MacosMaterial(mat) => Some(match mat {
+                    gpui::MacosVisualEffectMaterial::Titlebar => NSVisualEffectMaterial::Titlebar,
+                    gpui::MacosVisualEffectMaterial::Selection => NSVisualEffectMaterial::Selection,
+                    gpui::MacosVisualEffectMaterial::Menu => NSVisualEffectMaterial::Menu,
+                    gpui::MacosVisualEffectMaterial::Popover => NSVisualEffectMaterial::Popover,
+                    gpui::MacosVisualEffectMaterial::Sidebar => NSVisualEffectMaterial::Sidebar,
+                    gpui::MacosVisualEffectMaterial::HeaderView => NSVisualEffectMaterial::HeaderView,
+                    gpui::MacosVisualEffectMaterial::Sheet => NSVisualEffectMaterial::Sheet,
+                    gpui::MacosVisualEffectMaterial::WindowBackground => NSVisualEffectMaterial::WindowBackground,
+                    gpui::MacosVisualEffectMaterial::HudWindow => NSVisualEffectMaterial::HUDWindow,
+                    gpui::MacosVisualEffectMaterial::FullScreenUI => NSVisualEffectMaterial::FullScreenUI,
+                    gpui::MacosVisualEffectMaterial::ToolTip => NSVisualEffectMaterial::ToolTip,
+                    gpui::MacosVisualEffectMaterial::ContentBackground => NSVisualEffectMaterial::ContentBackground,
+                    gpui::MacosVisualEffectMaterial::UnderWindowBackground => NSVisualEffectMaterial::UnderWindowBackground,
+                    gpui::MacosVisualEffectMaterial::UnderPageBackground => NSVisualEffectMaterial::UnderPageBackground,
+                    gpui::MacosVisualEffectMaterial::AppearanceBased => NSVisualEffectMaterial::AppearanceBased,
+                    gpui::MacosVisualEffectMaterial::Light => NSVisualEffectMaterial::Light,
+                    gpui::MacosVisualEffectMaterial::Dark => NSVisualEffectMaterial::Dark,
+                    gpui::MacosVisualEffectMaterial::MediumLight => NSVisualEffectMaterial::MediumLight,
+                    gpui::MacosVisualEffectMaterial::UltraDark => NSVisualEffectMaterial::UltraDark,
+                }),
+                _ => None,
+            };
 
-                let _: () = msg_send![
-                    content_view,
-                    addSubview: blur_view,
-                    positioned: NSWindowOrderingMode::Below,
-                    relativeTo: NIL
-                ];
-                this.blurred_view = Some(blur_view.autorelease());
+            if let Some(material) = material_opt {
+                let blur_view: ObjcId = if let Some(view) = this.blurred_view {
+                    let _: () = msg_send![view, setMaterial: material];
+                    let _: () = msg_send![view, setState: NSVisualEffectState::Active];
+                    view
+                } else {
+                    let content_view = this.native_window.contentView();
+                    let frame: Objc2NSRect = msg_send![content_view, bounds];
+                    let mut blur_view: ObjcId = msg_send![&*BLURRED_VIEW_CLASS, alloc];
+                    blur_view = msg_send![blur_view, initWithFrame: frame];
+                    blur_view.setAutoresizingMask_(VIEW_WIDTH_SIZABLE | VIEW_HEIGHT_SIZABLE);
+                    let _: () = msg_send![blur_view, setMaterial: material];
+                    let _: () = msg_send![blur_view, setState: NSVisualEffectState::Active];
+
+                    let _: () = msg_send![
+                        content_view,
+                        addSubview: blur_view,
+                        positioned: NSWindowOrderingMode::Below,
+                        relativeTo: NIL
+                    ];
+                    let view_ref = blur_view.autorelease();
+                    this.blurred_view = Some(view_ref);
+                    view_ref
+                };
+            } else if let Some(blur_view) = this.blurred_view {
+                let _: () = msg_send![blur_view, removeFromSuperview];
+                this.blurred_view = None;
             }
         }
     }
@@ -2149,12 +2183,9 @@ impl PlatformWindow for MacWindow {
 
     fn draw(&self, scene: &gpui::Scene) {
         let mut this = self.0.lock();
-        #[cfg(feature = "wgpu")]
         if this.renderer.draw(scene) {
             this.force_render_pending = true;
         }
-        #[cfg(not(feature = "wgpu"))]
-        this.renderer.draw(scene);
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -2162,25 +2193,19 @@ impl PlatformWindow for MacWindow {
     }
 
     fn gpu_specs(&self) -> Option<gpui::GpuSpecs> {
-        #[cfg(feature = "wgpu")]
-        return Some(self.0.lock().renderer.gpu_specs());
-        #[cfg(not(feature = "wgpu"))]
-        None
+        Some(self.0.lock().renderer.gpu_specs())
     }
 
-    #[cfg(feature = "wgpu")]
     fn gpu_context(&self) -> Option<Box<dyn std::any::Any>> {
         let (device, queue) = self.0.lock().renderer.gpu_context();
         Some(Box::new((device, queue)))
     }
 
-    #[cfg(feature = "wgpu")]
     fn gpu_device_lost(&self) -> Option<bool> {
         // Only loads an atomic flag, so it is safe mid-recovery.
         Some(self.0.lock().renderer.device_lost())
     }
 
-    #[cfg(feature = "wgpu")]
     fn gpu_context_info(&self) -> Option<Box<dyn std::any::Any>> {
         self.0
             .lock()

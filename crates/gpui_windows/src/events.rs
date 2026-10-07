@@ -5,7 +5,7 @@ use gpui_util::ResultExt;
 use windows::{
     Win32::{
         Foundation::*,
-        Graphics::Gdi::*,
+        Graphics::{Dwm::*, Gdi::*},
         System::SystemServices::*,
         UI::{
             Controls::*,
@@ -169,7 +169,12 @@ impl WindowsWindowInner {
         if let Some(n) = handled {
             LRESULT(n)
         } else {
-            unsafe { DefWindowProcW(handle, msg, wparam, lparam) }
+            let mut dwm_result = LRESULT(0);
+            if unsafe { DwmDefWindowProc(handle, msg, wparam, lparam, &mut dwm_result) }.as_bool() {
+                dwm_result
+            } else {
+                unsafe { DefWindowProcW(handle, msg, wparam, lparam) }
+            }
         }
     }
 
@@ -786,7 +791,7 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
-        if !self.hide_title_bar || self.state.is_fullscreen() || wparam.0 == 0 {
+        if !self.hide_title_bar.get() || self.state.is_fullscreen() || wparam.0 == 0 {
             return None;
         }
 
@@ -870,7 +875,7 @@ impl WindowsWindowInner {
     }
 
     fn handle_create_msg(&self, handle: HWND) -> Option<isize> {
-        if self.hide_title_bar {
+        if self.hide_title_bar.get() {
             notify_frame_changed(handle);
             Some(0)
         } else {
@@ -968,6 +973,23 @@ impl WindowsWindowInner {
             return None;
         }
 
+        let mut cursor_point = POINT {
+            x: lparam.signed_loword().into(),
+            y: lparam.signed_hiword().into(),
+        };
+        unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
+
+        let scale_factor = self.state.scale_factor.get();
+        if let Some(mut func) = self.state.callbacks.input.take() {
+            let input = PlatformInput::MouseMove(MouseMoveEvent {
+                position: logical_point(cursor_point.x as f32, cursor_point.y as f32, scale_factor),
+                pressed_button: None,
+                modifiers: current_modifiers(),
+            });
+            func(input);
+            self.state.callbacks.input.set(Some(func));
+        }
+
         let callback = self.state.callbacks.hit_test_window_control.take();
         let drag_area = if let Some(mut callback) = callback {
             let area = callback();
@@ -990,42 +1012,47 @@ impl WindowsWindowInner {
             None
         };
 
-        if !self.hide_title_bar {
-            // If the OS draws the title bar, we don't need to handle hit test messages.
+        if let Some(area) = drag_area {
+            if area == HTMAXBUTTON as isize || area == HTMINBUTTON as isize || area == HTCLOSE as isize {
+                return Some(area);
+            }
+        }
+
+        if !self.hide_title_bar.get() {
             return drag_area;
         }
 
         let dpi = unsafe { GetDpiForWindow(handle) };
-        // We do not use the OS title bar, so the default `DefWindowProcW` will only register a 1px edge for resizes
-        // We need to calculate the frame thickness ourselves and do the hit test manually.
         let frame_y = get_frame_thicknessx(dpi);
         let frame_x = get_frame_thicknessy(dpi);
-        let mut cursor_point = POINT {
-            x: lparam.signed_loword().into(),
-            y: lparam.signed_hiword().into(),
-        };
+        if self.is_resizable && !self.state.is_maximized() {
+            let mut rect = Default::default();
+            unsafe { GetClientRect(handle, &mut rect) }.log_err();
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
 
-        unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
-        if self.is_resizable
-            && !self.state.is_maximized()
-            && 0 <= cursor_point.y
-            && cursor_point.y <= frame_y
-        {
-            // x-axis actually goes from -frame_x to 0
-            return Some(if cursor_point.x <= 0 {
-                HTTOPLEFT
-            } else {
-                let mut rect = Default::default();
-                unsafe { GetWindowRect(handle, &mut rect) }.log_err();
-                // right and bottom bounds of RECT are exclusive, thus `-1`
-                let right = rect.right - rect.left - 1;
-                // the bounds include the padding frames, so accommodate for both of them
-                if right - 2 * frame_x <= cursor_point.x {
-                    HTTOPRIGHT
-                } else {
-                    HTTOP
-                }
-            } as _);
+            let on_top = cursor_point.y <= frame_y;
+            let on_bottom = cursor_point.y >= height - frame_y;
+            let on_left = cursor_point.x <= frame_x;
+            let on_right = cursor_point.x >= width - frame_x;
+
+            if on_top && on_left {
+                return Some(HTTOPLEFT as _);
+            } else if on_top && on_right {
+                return Some(HTTOPRIGHT as _);
+            } else if on_bottom && on_left {
+                return Some(HTBOTTOMLEFT as _);
+            } else if on_bottom && on_right {
+                return Some(HTBOTTOMRIGHT as _);
+            } else if on_top {
+                return Some(HTTOP as _);
+            } else if on_bottom {
+                return Some(HTBOTTOM as _);
+            } else if on_left {
+                return Some(HTLEFT as _);
+            } else if on_right {
+                return Some(HTRIGHT as _);
+            }
         }
 
         drag_area
@@ -1048,10 +1075,10 @@ impl WindowsWindowInner {
             pressed_button: None,
             modifiers: current_modifiers(),
         });
-        let handled = !func(input).propagate;
+        func(input);
         self.state.callbacks.input.set(Some(func));
 
-        if handled { Some(0) } else { None }
+        None
     }
 
     fn handle_nc_mouse_down_msg(
@@ -1754,7 +1781,7 @@ fn get_frame_thicknessy(dpi: u32) -> i32 {
     resize_frame_thickness + padding_thickness
 }
 
-fn notify_frame_changed(handle: HWND) {
+pub(crate) fn notify_frame_changed(handle: HWND) {
     unsafe {
         SetWindowPos(
             handle,

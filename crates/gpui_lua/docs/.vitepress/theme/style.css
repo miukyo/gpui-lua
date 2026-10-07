@@ -1,0 +1,71 @@
+:root {
+  --vp-c-brand-1: #89b4fa;
+  --vp-c-brand-2: #b4befe;
+  --vp-c-brand-3: #74c7ec;
+  --vp-c-brand-soft: rgba(137, 180, 250, 0.14);
+
+  --vp-c-bg: #1e1e2e;
+  --vp-c-bg-alt: #181825;
+  --vp-c-bg-elv: #313244;
+  --vp-c-bg-soft: #313244;
+
+  --vp-c-border: #45475a;
+  --vp-c-divider: #313244;
+  --vp-c-gutter: #11111b;
+
+  --vp-c-text-1: #cdd6f4;
+  --vp-c-text-2: #a6adc8;
+  --vp-c-text-3: #6c7086;
+
+  --vp-code-block-bg: #11111b;
+}
+
+.dark {
+  --vp-c-brand-1: #89b4fa;
+  --vp-c-brand-2: #b4befe;
+  --vp-c-brand-3: #74c7ec;
+  --vp-c-brand-soft: rgba(137, 180, 250, 0.14);
+
+  --vp-c-bg: #1e1e2e;
+  --vp-c-bg-alt: #181825;
+  --vp-c-bg-elv: #313244;
+  --vp-c-bg-soft: #313244;
+
+  --vp-c-border: #45475a;
+  --vp-c-divider: #313244;
+  --vp-c-gutter: #11111b;
+
+  --vp-c-text-1: #cdd6f4;
+  --vp-c-text-2: #a6adc8;
+  --vp-c-text-3: #6c7086;
+
+  --vp-code-block-bg: #11111b;
+}
+
+/* Custom badges and tags */
+.badge-tech {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  margin-right: 6px;
+  background-color: #313244;
+  color: #89b4fa;
+  border: 1px solid #45475a;
+}
+
+/* Feature grid enhancements */
+.VPFeature {
+  background-color: #181825 !important;
+  border: 1px solid #313244 !important;
+  border-radius: 12px !important;
+  transition: transform 0.2s ease, border-color 0.2s ease !important;
+}
+
+.VPFeature:hover {
+  border-color: #89b4fa !important;
+  transform: translateY(-2px);
+}

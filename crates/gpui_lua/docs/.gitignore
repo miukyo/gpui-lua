@@ -1,0 +1,7 @@
+node_modules/
+.vitepress/dist/
+.vitepress/cache/
+*.log
+
+# Allow bundled wasm in public
+!public/ulua_web_bg.wasm

@@ -75,7 +75,7 @@ impl NativeBackend {
             backend: self,
             raw: wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: self.into(),
-                flags: wgpu::InstanceFlags::default(),
+                flags: wgpu::InstanceFlags::empty().with_env(),
                 backend_options,
                 memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
                 display,
@@ -83,12 +83,31 @@ impl NativeBackend {
         }
     }
 
+    pub(crate) fn preference() -> SmallVec<[Self; 3]> {
+        #[cfg(target_os = "windows")]
+        if let Ok(backend) = std::env::var("WGPU_BACKEND") {
+            let mut list = SmallVec::new();
+            if backend.eq_ignore_ascii_case("vulkan") {
+                list.push(Self::Vulkan);
+                list.push(Self::Dx12);
+                list.push(Self::Gl);
+                return list;
+            } else if backend.eq_ignore_ascii_case("gl") {
+                list.push(Self::Gl);
+                list.push(Self::Dx12);
+                list.push(Self::Vulkan);
+                return list;
+            }
+        }
+        SmallVec::from_slice(Self::PREFERENCE)
+    }
+
     pub(crate) fn try_in_preference_order<T>(
         operation: &'static str,
         mut attempt: impl FnMut(Self) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let mut failures = SmallVec::<[NativeBackendFailure; 3]>::new();
-        for &backend in Self::PREFERENCE {
+        for &backend in Self::preference().iter() {
             match attempt(backend) {
                 Ok(value) => return Ok(value),
                 Err(source) => failures.push(NativeBackendFailure { backend, source }),
@@ -726,6 +745,24 @@ impl WgpuContext {
         adapter_policy: SoftwareAdapterPolicy,
         extra_requirements: Option<&WgpuDeviceRequirements>,
     ) -> anyhow::Result<SelectedAdapter> {
+        // Fast path: if no device override or hint is given, directly request the
+        // high-performance adapter without enumerating all system adapters.
+        if device_id_filter.is_none() && compositor_gpu.is_none() {
+            if let Ok(adapter) = instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(surface),
+                force_fallback_adapter: false,
+            }).await {
+                let info = adapter.get_info();
+                if adapter_policy.accepts(info.device_type) {
+                    if let Ok(device) = Self::try_adapter_with_surface(&adapter, surface, extra_requirements).await {
+                        log::info!("Direct adapter selection succeeded: {} ({:?})", info.name, info.backend);
+                        return Ok(SelectedAdapter { adapter, device });
+                    }
+                }
+            }
+        }
+
         let mut adapters: Vec<_> = instance.enumerate_adapters(backend.into()).await;
 
         if adapters.is_empty() {

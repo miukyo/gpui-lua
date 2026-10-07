@@ -5,6 +5,58 @@ fn main() {
     // A build script compiles for the host, so `cfg!(target_os)` here would
     // describe the machine running cargo. The platform being compiled for is
     // only visible through the environment cargo sets for build scripts.
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-env-changed=FFMPEG_DIR");
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let embedded_dir = out_dir.join("embedded_dlls");
+        let _ = std::fs::create_dir_all(&embedded_dir);
+
+        let required_dlls = [
+            "avutil-61.dll",
+            "swresample-7.dll",
+            "swscale-10.dll",
+            "avcodec-63.dll",
+            "avformat-63.dll",
+        ];
+
+        if let Ok(ffmpeg_dir) = env::var("FFMPEG_DIR") {
+            let bin_dir = std::path::Path::new(&ffmpeg_dir).join("bin");
+            if bin_dir.exists() {
+                for dll_name in &required_dlls {
+                    let dll_path = bin_dir.join(dll_name);
+                    if dll_path.exists() {
+                        if let Ok(raw_bytes) = std::fs::read(&dll_path) {
+                            let compressed = miniz_oxide::deflate::compress_to_vec(&raw_bytes, 6);
+                            let target_deflate = embedded_dir.join(format!("{dll_name}.deflate"));
+                            let _ = std::fs::write(&target_deflate, compressed);
+                        }
+                    }
+                }
+
+                if let Some(target_dir) = out_dir
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .and_then(|p| p.parent())
+                {
+                    let examples_dir = target_dir.join("examples");
+                    let _ = std::fs::create_dir_all(&examples_dir);
+                    if let Ok(entries) = std::fs::read_dir(&bin_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.extension().and_then(|ext| ext.to_str()) == Some("dll") {
+                                if let Some(file_name) = path.file_name() {
+                                    let _ = std::fs::copy(&path, target_dir.join(file_name));
+                                    let _ = std::fs::copy(&path, examples_dir.join(file_name));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
     }

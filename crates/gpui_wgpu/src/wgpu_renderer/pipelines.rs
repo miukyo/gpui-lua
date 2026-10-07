@@ -50,16 +50,16 @@ fn instance_binding_entries(source: InstanceBindingSource<'_>) -> Vec<wgpu::Bind
 
 pub(super) struct WgpuPipelines {
     pub(super) quads: WgpuRenderPipeline,
-    pub(super) smoothed_quads: WgpuRenderPipeline,
+    pub(super) smoothed_quads: std::sync::Arc<parking_lot::RwLock<Option<WgpuRenderPipeline>>>,
     pub(super) shadows: WgpuRenderPipeline,
-    pub(super) smoothed_shadows: WgpuRenderPipeline,
+    pub(super) smoothed_shadows: std::sync::Arc<parking_lot::RwLock<Option<WgpuRenderPipeline>>>,
     pub(super) path_rasterization: WgpuRenderPipeline,
     pub(super) paths: WgpuRenderPipeline,
     pub(super) underlines: WgpuRenderPipeline,
     pub(super) monochrome_sprites: WgpuRenderPipeline,
     pub(super) subpixel_sprites: Option<WgpuRenderPipeline>,
     pub(super) polychrome_sprites: WgpuRenderPipeline,
-    pub(super) smoothed_polychrome_sprites: WgpuRenderPipeline,
+    pub(super) smoothed_polychrome_sprites: std::sync::Arc<parking_lot::RwLock<Option<WgpuRenderPipeline>>>,
     #[cfg_attr(
         not(any(
             all(target_family = "wasm", feature = "custom-gpu"),
@@ -74,7 +74,7 @@ pub(super) struct WgpuPipelines {
     pub(super) blur_downsample: WgpuRenderPipeline,
     pub(super) blur: WgpuRenderPipeline,
     pub(super) blur_composite: WgpuRenderPipeline,
-    pub(super) smoothed_blur_composite: WgpuRenderPipeline,
+    pub(super) smoothed_blur_composite: std::sync::Arc<parking_lot::RwLock<Option<WgpuRenderPipeline>>>,
 }
 
 pub(super) struct WgpuRenderPipeline {
@@ -423,26 +423,194 @@ impl WgpuPipelines {
                 )
             };
 
-        Self {
-            quads: create(shader::QUADS, &scene_target, 1, &shader_module),
-            smoothed_quads: create(shader::SMOOTHED_QUADS, &scene_target, 1, &shader_module),
-            shadows: create(shader::SHADOWS, &scene_target, 1, &shader_module),
-            smoothed_shadows: create(shader::SMOOTHED_SHADOWS, &scene_target, 1, &shader_module),
-            path_rasterization: create(
+        let smoothed_quads = std::sync::Arc::new(parking_lot::RwLock::new(None));
+        let smoothed_shadows = std::sync::Arc::new(parking_lot::RwLock::new(None));
+        let smoothed_polychrome_sprites = std::sync::Arc::new(parking_lot::RwLock::new(None));
+        let smoothed_blur_composite = std::sync::Arc::new(parking_lot::RwLock::new(None));
+
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let sq_target = std::sync::Arc::clone(&smoothed_quads);
+            let ss_target = std::sync::Arc::clone(&smoothed_shadows);
+            let sps_target = std::sync::Arc::clone(&smoothed_polychrome_sprites);
+            let sbc_target = std::sync::Arc::clone(&smoothed_blur_composite);
+
+            let device_clone = device.clone();
+            let shader_module_clone = shader_module.clone();
+            let scene_target_clone = scene_target.clone();
+            let composite_target_clone = composite_target.clone();
+            let instance_layout_clone = create_pipeline_layout(
+                device,
+                "instance_pipeline_layout",
+                bind_group_layouts,
+                &bind_group_layouts.instances,
+            );
+            let textured_layout_clone = create_pipeline_layout(
+                device,
+                "textured_pipeline_layout",
+                bind_group_layouts,
+                &bind_group_layouts.textured_instances,
+            );
+            let blur_layout_clone = create_pipeline_layout(
+                device,
+                "blur_pipeline_layout",
+                bind_group_layouts,
+                &bind_group_layouts.blur,
+            );
+
+            std::thread::Builder::new()
+                .name("gpui-wgpu-smoothed-shaders".to_string())
+                .spawn(move || {
+                    let sq = create_render_pipeline(
+                        &device_clone,
+                        shader::SMOOTHED_QUADS,
+                        &instance_layout_clone,
+                        &scene_target_clone,
+                        1,
+                        &shader_module_clone,
+                    );
+                    *sq_target.write() = Some(sq);
+
+                    let ss = create_render_pipeline(
+                        &device_clone,
+                        shader::SMOOTHED_SHADOWS,
+                        &instance_layout_clone,
+                        &scene_target_clone,
+                        1,
+                        &shader_module_clone,
+                    );
+                    *ss_target.write() = Some(ss);
+
+                    let sps = create_render_pipeline(
+                        &device_clone,
+                        shader::SMOOTHED_POLYCHROME_SPRITES,
+                        &textured_layout_clone,
+                        &scene_target_clone,
+                        1,
+                        &shader_module_clone,
+                    );
+                    *sps_target.write() = Some(sps);
+
+                    let sbc = create_render_pipeline(
+                        &device_clone,
+                        shader::SMOOTHED_BLUR_COMPOSITE,
+                        &blur_layout_clone,
+                        &composite_target_clone,
+                        1,
+                        &shader_module_clone,
+                    );
+                    *sbc_target.write() = Some(sbc);
+                })
+                .ok();
+        }
+
+        #[cfg(target_family = "wasm")]
+        {
+            let sq = create(shader::SMOOTHED_QUADS, &scene_target, 1, &shader_module);
+            *smoothed_quads.write() = Some(sq);
+            let ss = create(shader::SMOOTHED_SHADOWS, &scene_target, 1, &shader_module);
+            *smoothed_shadows.write() = Some(ss);
+            let sps = create(shader::SMOOTHED_POLYCHROME_SPRITES, &scene_target, 1, &shader_module);
+            *smoothed_polychrome_sprites.write() = Some(sps);
+            let sbc = create(shader::SMOOTHED_BLUR_COMPOSITE, &composite_target, 1, &shader_module);
+            *smoothed_blur_composite.write() = Some(sbc);
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        let (
+            quads,
+            shadows,
+            path_rasterization,
+            paths,
+            underlines,
+            monochrome_sprites,
+            subpixel_sprites,
+            polychrome_sprites,
+            surfaces,
+            blur_downsample,
+            blur,
+            blur_composite,
+        ) = std::thread::scope(|s| {
+            let h_quads = s.spawn(|| create(shader::QUADS, &scene_target, 1, &shader_module));
+            let h_shadows = s.spawn(|| create(shader::SHADOWS, &scene_target, 1, &shader_module));
+            let h_path_rasterization = s.spawn(|| {
+                create(
+                    shader::PATH_RASTERIZATION,
+                    &path_rasterization_target,
+                    path_sample_count,
+                    &shader_module,
+                )
+            });
+            let h_paths = s.spawn(|| create(shader::PATHS, &path_target, 1, &shader_module));
+            let h_underlines = s.spawn(|| create(shader::UNDERLINES, &scene_target, 1, &shader_module));
+            let h_monochrome_sprites = s.spawn(|| create(shader::MONOCHROME_SPRITES, &scene_target, 1, &shader_module));
+            let h_subpixel_sprites = s.spawn(|| {
+                subpixel_shader_module.as_ref().map(|module| {
+                    create(
+                        shader::SUBPIXEL_SPRITES,
+                        &wgpu::ColorTargetState {
+                            write_mask: wgpu::ColorWrites::COLOR,
+                            ..color_target(surface_format, Some(subpixel_blend_state()))
+                        },
+                        1,
+                        module,
+                    )
+                })
+            });
+            let h_polychrome_sprites = s.spawn(|| create(shader::POLYCHROME_SPRITES, &scene_target, 1, &shader_module));
+            let h_surfaces = s.spawn(|| create(shader::SURFACES, &scene_target, 1, &shader_module));
+            let h_blur_downsample = s.spawn(|| create(shader::BLUR_DOWNSAMPLE, &overwrite_target, 1, &shader_module));
+            let h_blur = s.spawn(|| create(shader::BLUR, &overwrite_target, 1, &shader_module));
+            let h_blur_composite = s.spawn(|| create(shader::BLUR_COMPOSITE, &composite_target, 1, &shader_module));
+
+            (
+                h_quads.join().unwrap(),
+                h_shadows.join().unwrap(),
+                h_path_rasterization.join().unwrap(),
+                h_paths.join().unwrap(),
+                h_underlines.join().unwrap(),
+                h_monochrome_sprites.join().unwrap(),
+                h_subpixel_sprites.join().unwrap(),
+                h_polychrome_sprites.join().unwrap(),
+                h_surfaces.join().unwrap(),
+                h_blur_downsample.join().unwrap(),
+                h_blur.join().unwrap(),
+                h_blur_composite.join().unwrap(),
+            )
+        });
+
+        #[cfg(target_family = "wasm")]
+        let (
+            quads,
+            shadows,
+            path_rasterization,
+            paths,
+            underlines,
+            monochrome_sprites,
+            subpixel_sprites,
+            polychrome_sprites,
+            surfaces,
+            blur_downsample,
+            blur,
+            blur_composite,
+        ) = (
+            create(shader::QUADS, &scene_target, 1, &shader_module),
+            create(shader::SHADOWS, &scene_target, 1, &shader_module),
+            create(
                 shader::PATH_RASTERIZATION,
                 &path_rasterization_target,
                 path_sample_count,
                 &shader_module,
             ),
-            paths: create(shader::PATHS, &path_target, 1, &shader_module),
-            underlines: create(shader::UNDERLINES, &scene_target, 1, &shader_module),
-            monochrome_sprites: create(
+            create(shader::PATHS, &path_target, 1, &shader_module),
+            create(shader::UNDERLINES, &scene_target, 1, &shader_module),
+            create(
                 shader::MONOCHROME_SPRITES,
                 &scene_target,
                 1,
                 &shader_module,
             ),
-            subpixel_sprites: subpixel_shader_module.as_ref().map(|module| {
+            subpixel_shader_module.as_ref().map(|module| {
                 create(
                     shader::SUBPIXEL_SPRITES,
                     &wgpu::ColorTargetState {
@@ -453,33 +621,40 @@ impl WgpuPipelines {
                     module,
                 )
             }),
-            polychrome_sprites: create(
+            create(
                 shader::POLYCHROME_SPRITES,
                 &scene_target,
                 1,
                 &shader_module,
             ),
-            smoothed_polychrome_sprites: create(
-                shader::SMOOTHED_POLYCHROME_SPRITES,
-                &scene_target,
-                1,
-                &shader_module,
-            ),
-            surfaces: create(shader::SURFACES, &scene_target, 1, &shader_module),
-            blur_downsample: create(
+            create(shader::SURFACES, &scene_target, 1, &shader_module),
+            create(
                 shader::BLUR_DOWNSAMPLE,
                 &overwrite_target,
                 1,
                 &shader_module,
             ),
-            blur: create(shader::BLUR, &overwrite_target, 1, &shader_module),
-            blur_composite: create(shader::BLUR_COMPOSITE, &composite_target, 1, &shader_module),
-            smoothed_blur_composite: create(
-                shader::SMOOTHED_BLUR_COMPOSITE,
-                &composite_target,
-                1,
-                &shader_module,
-            ),
+            create(shader::BLUR, &overwrite_target, 1, &shader_module),
+            create(shader::BLUR_COMPOSITE, &composite_target, 1, &shader_module),
+        );
+
+        Self {
+            quads,
+            smoothed_quads,
+            shadows,
+            smoothed_shadows,
+            path_rasterization,
+            paths,
+            underlines,
+            monochrome_sprites,
+            subpixel_sprites,
+            polychrome_sprites,
+            smoothed_polychrome_sprites,
+            surfaces,
+            blur_downsample,
+            blur,
+            blur_composite,
+            smoothed_blur_composite,
         }
     }
 }

@@ -213,7 +213,8 @@ impl WgpuAtlasState {
         let size = min_size.max(&DEFAULT_ATLAS_SIZE).min(&max_atlas_size);
         let format = match kind {
             AtlasTextureKind::Monochrome => wgpu::TextureFormat::R8Unorm,
-            AtlasTextureKind::Subpixel | AtlasTextureKind::Polychrome => self.color_texture_format,
+            AtlasTextureKind::Subpixel => wgpu::TextureFormat::Rgba8Unorm,
+            AtlasTextureKind::Polychrome => self.color_texture_format,
         };
 
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {

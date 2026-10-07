@@ -1,0 +1,66 @@
+[package]
+name = "gpui_lua"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+[[example]]
+name = "app"
+path = "examples/app.rs"
+[[bin]]
+name = "gpui-lua"
+path = "src/main.rs"
+[features]
+default = ["jit", "wgpu", "media", "webrtc", "sqlite", "net", "crypto", "ffi"]
+full = ["default"]
+jit = ["ulua-rt/jit"]
+wgpu = ["gpui_platform/windows-wgpu", "gpui_platform/macos-wgpu"]
+media = ["dep:media", "dep:image", "dep:smallvec"]
+webrtc = ["dep:webrtc", "dep:rtc", "dep:async-trait"]
+sqlite = ["dep:rusqlite"]
+net = ["dep:reqwest", "dep:tokio-tungstenite", "dep:http"]
+crypto = ["dep:ring", "dep:sha2", "dep:base64", "dep:uuid"]
+ffi = ["dep:libloading"]
+
+[dependencies]
+gpui = { workspace = true }
+ulua-rt = { version = "0.1.5", features = ["async", "jit", "send", "serde", "macros"] }
+ulua = "0.1.5"
+gpui_platform = { workspace = true }
+notify = "6.1"
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+toml = "1.1"
+ropey = { version = "=2.0.0-beta.1", features = ["metric_chars", "metric_lines_lf", "metric_utf16"] }
+unicode-segmentation = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+log = { workspace = true }
+palette = { workspace = true }
+async-channel = { workspace = true }
+bytes = "1"
+miniz_oxide = "0.8"
+rust-embed = "8.12"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true }
+# Optional modular subsystems (can be opted out for a lightweight app)
+media = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+smallvec = { workspace = true, optional = true }
+webrtc = { version = "0.21", default-features = false, features = ["crypto-ring", "runtime-tokio"], optional = true }
+rtc = { version = "0.21", default-features = false, optional = true }
+async-trait = { version = "0.1", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "handshake", "rustls-tls-webpki-roots"], optional = true }
+http = { workspace = true, optional = true }
+ring = { version = "0.17", optional = true }
+sha2 = { version = "0.10", optional = true }
+base64 = { version = "0.22", optional = true }
+uuid = { workspace = true, optional = true }
+libloading = { version = "0.8", optional = true }
+[dev-dependencies]
+tempfile = { workspace = true }

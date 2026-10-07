@@ -1898,7 +1898,11 @@ impl Window {
             Box::new(move || {
                 handle
                     .update(&mut cx, |_, window, _cx| {
-                        for (area, hitbox) in &window.rendered_frame.window_control_hitboxes {
+                        let mouse_pos = window.mouse_position();
+                        for (area, hitbox) in window.rendered_frame.window_control_hitboxes.iter().rev() {
+                            if hitbox.bounds.contains(&mouse_pos) {
+                                return Some(*area);
+                            }
                             let mut scrollable_ids = window.mouse_hit_test().iter_scrollable();
                             if scrollable_ids.contains(&hitbox.id) {
                                 return Some(*area);
@@ -2096,55 +2100,109 @@ impl ContentMask<Pixels> {
     /// For each edge, the mask that actually clips at that edge contributes its
     /// fade; when both masks clip at the same coordinate, the stronger fade wins.
     pub fn intersect(&self, other: &Self) -> Self {
-        fn edge_fade(
+        if self.bounds.intersect(&other.bounds).is_empty() {
+            return ContentMask {
+                bounds: Bounds::default(),
+                fade_out: Edges::default(),
+            };
+        }
+
+        fn intersect_start_edge(
             a: Pixels,
-            b: Pixels,
             a_fade: Pixels,
+            b: Pixels,
             b_fade: Pixels,
-            a_clips_closer: impl Fn(Pixels, Pixels) -> bool,
-        ) -> Pixels {
-            if a_clips_closer(a, b) {
-                a_fade
-            } else if a_clips_closer(b, a) {
-                b_fade
+        ) -> (Pixels, Pixels) {
+            if a_fade > Pixels::ZERO && b_fade > Pixels::ZERO {
+                if a > b {
+                    (a, a_fade)
+                } else if b > a {
+                    (b, b_fade)
+                } else {
+                    (a, a_fade.max(b_fade))
+                }
+            } else if a_fade > Pixels::ZERO {
+                if a >= b || a + a_fade > b {
+                    (a, a_fade)
+                } else {
+                    (b, Pixels::ZERO)
+                }
+            } else if b_fade > Pixels::ZERO {
+                if b >= a || b + b_fade > a {
+                    (b, b_fade)
+                } else {
+                    (a, Pixels::ZERO)
+                }
             } else {
-                a_fade.max(b_fade)
+                (a.max(b), Pixels::ZERO)
             }
         }
 
-        ContentMask {
-            bounds: self.bounds.intersect(&other.bounds),
-            fade_out: Edges {
-                top: edge_fade(
-                    self.bounds.top(),
-                    other.bounds.top(),
-                    self.fade_out.top,
-                    other.fade_out.top,
-                    |a, b| a > b,
-                ),
-                right: edge_fade(
-                    self.bounds.right(),
-                    other.bounds.right(),
-                    self.fade_out.right,
-                    other.fade_out.right,
-                    |a, b| a < b,
-                ),
-                bottom: edge_fade(
-                    self.bounds.bottom(),
-                    other.bounds.bottom(),
-                    self.fade_out.bottom,
-                    other.fade_out.bottom,
-                    |a, b| a < b,
-                ),
-                left: edge_fade(
-                    self.bounds.left(),
-                    other.bounds.left(),
-                    self.fade_out.left,
-                    other.fade_out.left,
-                    |a, b| a > b,
-                ),
-            },
+        fn intersect_end_edge(
+            a: Pixels,
+            a_fade: Pixels,
+            b: Pixels,
+            b_fade: Pixels,
+        ) -> (Pixels, Pixels) {
+            if a_fade > Pixels::ZERO && b_fade > Pixels::ZERO {
+                if a < b {
+                    (a, a_fade)
+                } else if b < a {
+                    (b, b_fade)
+                } else {
+                    (a, a_fade.max(b_fade))
+                }
+            } else if a_fade > Pixels::ZERO {
+                if a <= b || a - a_fade < b {
+                    (a, a_fade)
+                } else {
+                    (b, Pixels::ZERO)
+                }
+            } else if b_fade > Pixels::ZERO {
+                if b <= a || b - b_fade < a {
+                    (b, b_fade)
+                } else {
+                    (a, Pixels::ZERO)
+                }
+            } else {
+                (a.min(b), Pixels::ZERO)
+            }
         }
+
+        let (top, fade_top) = intersect_start_edge(
+            self.bounds.top(),
+            self.fade_out.top,
+            other.bounds.top(),
+            other.fade_out.top,
+        );
+        let (bottom, fade_bottom) = intersect_end_edge(
+            self.bounds.bottom(),
+            self.fade_out.bottom,
+            other.bounds.bottom(),
+            other.fade_out.bottom,
+        );
+        let (left, fade_left) = intersect_start_edge(
+            self.bounds.left(),
+            self.fade_out.left,
+            other.bounds.left(),
+            other.fade_out.left,
+        );
+        let (right, fade_right) = intersect_end_edge(
+            self.bounds.right(),
+            self.fade_out.right,
+            other.bounds.right(),
+            other.fade_out.right,
+        );
+
+        let bounds = Bounds::from_corners(point(left, top), point(right, bottom));
+        let fade_out = Edges {
+            top: fade_top,
+            right: fade_right,
+            bottom: fade_bottom,
+            left: fade_left,
+        };
+
+        ContentMask { bounds, fade_out }
     }
 }
 
@@ -2170,6 +2228,13 @@ mod content_mask_tests {
 
         let child = mask(0., 40., 0.);
         assert_eq!(outer.intersect(&child).fade_out.left, px(20.));
+
+        // Scrolled tip out of view: edge at -10 with 80px fade still active inside viewport (0..100)
+        let scrolled = mask(-10., 100., 80.);
+        let viewport = mask(0., 500., 0.);
+        let result = scrolled.intersect(&viewport);
+        assert_eq!(result.fade_out.left, px(80.));
+        assert_eq!(result.bounds.left(), px(-10.));
     }
 }
 
@@ -4607,7 +4672,7 @@ impl Window {
             padding: 0,
         };
 
-        if !quad.background.is_transparent() {
+        if !quad.background.is_transparent() || quad.content_mask.fade_out != Edges::default() {
             self.next_frame.scene.insert_primitive(quad);
             return;
         }
@@ -6799,6 +6864,7 @@ impl Window {
         target_family = "wasm",
         target_os = "linux",
         target_os = "freebsd",
+        target_os = "windows",
         target_os = "macos"
     ))]
     pub fn gpu_context_info(&self) -> Option<Box<dyn std::any::Any>> {

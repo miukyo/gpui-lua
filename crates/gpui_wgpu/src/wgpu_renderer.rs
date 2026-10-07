@@ -444,6 +444,7 @@ mod tests {
         assert_eq!(premultiplied.alpha.dst_factor, wgpu::BlendFactor::One);
     }
 
+
     #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
     #[test]
     fn underline_opacity_is_applied_once() -> anyhow::Result<()> {

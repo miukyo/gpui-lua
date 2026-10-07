@@ -19,6 +19,7 @@ pub enum SurfaceSource {
         target_os = "linux",
         target_os = "freebsd",
         all(target_os = "macos", feature = "custom-gpu"),
+        all(target_os = "windows", feature = "custom-gpu"),
         all(target_family = "wasm", feature = "custom-gpu")
     ))]
     Texture {
@@ -36,6 +37,9 @@ pub enum SurfaceSource {
     /// A native Windows Graphics Capture texture.
     #[cfg(target_os = "windows")]
     WindowsCapture(WindowsScreenCaptureFrame),
+    /// A native DirectX 11 surface (ID3D11Texture2D).
+    #[cfg(target_os = "windows")]
+    DirectX(DirectXSurface),
     /// A placeholder for platforms that cannot import native surfaces.
     #[doc(hidden)]
     Unsupported(Size<DevicePixels>),
@@ -58,6 +62,8 @@ impl std::fmt::Debug for SurfaceSource {
                 .finish_non_exhaustive(),
             #[cfg(target_os = "windows")]
             SurfaceSource::WindowsCapture(ref frame) => frame.fmt(_f),
+            #[cfg(target_os = "windows")]
+            SurfaceSource::DirectX(ref surface) => surface.fmt(_f),
             SurfaceSource::Unsupported(size) => _f.debug_tuple("Unsupported").field(&size).finish(),
         }
     }
@@ -79,6 +85,8 @@ impl SurfaceSource {
             SurfaceSource::Texture { size, .. } => *size,
             #[cfg(target_os = "windows")]
             SurfaceSource::WindowsCapture(frame) => frame.size(),
+            #[cfg(target_os = "windows")]
+            SurfaceSource::DirectX(surface) => surface.size(),
             SurfaceSource::Unsupported(size) => *size,
         }
     }
@@ -102,6 +110,63 @@ impl From<WindowsScreenCaptureFrame> for SurfaceSource {
 impl From<crate::ScreenCaptureFrame> for SurfaceSource {
     fn from(value: crate::ScreenCaptureFrame) -> Self {
         SurfaceSource::WindowsCapture(value.0)
+    }
+}
+
+/// A native DirectX 11 surface backed by an `ID3D11Texture2D`.
+#[cfg(target_os = "windows")]
+#[derive(Clone)]
+pub struct DirectXSurface {
+    texture: std::sync::Arc<windows_061::Win32::Graphics::Direct3D11::ID3D11Texture2D>,
+    size: Size<DevicePixels>,
+}
+
+#[cfg(target_os = "windows")]
+impl DirectXSurface {
+    /// Create a new `DirectXSurface` from an `ID3D11Texture2D` and dimensions.
+    pub fn new(
+        texture: windows_061::Win32::Graphics::Direct3D11::ID3D11Texture2D,
+        size: Size<DevicePixels>,
+    ) -> Self {
+        Self {
+            texture: std::sync::Arc::new(texture),
+            size,
+        }
+    }
+
+    /// Create a new `DirectXSurface` from an existing `Arc<ID3D11Texture2D>` and dimensions.
+    pub fn from_arc(
+        texture: std::sync::Arc<windows_061::Win32::Graphics::Direct3D11::ID3D11Texture2D>,
+        size: Size<DevicePixels>,
+    ) -> Self {
+        Self { texture, size }
+    }
+
+    /// Returns the native `ID3D11Texture2D`.
+    pub fn texture(&self) -> &windows_061::Win32::Graphics::Direct3D11::ID3D11Texture2D {
+        &self.texture
+    }
+
+    /// Returns the dimensions in device pixels.
+    pub fn size(&self) -> Size<DevicePixels> {
+        self.size
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl std::fmt::Debug for DirectXSurface {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DirectXSurface")
+            .field("size", &self.size)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl From<DirectXSurface> for SurfaceSource {
+    fn from(value: DirectXSurface) -> Self {
+        SurfaceSource::DirectX(value)
     }
 }
 
@@ -172,14 +237,13 @@ impl Element for Surface {
         _bounds: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
         _: &mut Self::PrepaintState,
-        _window: &mut Window,
-        _: &mut App,
+        window: &mut Window,
+        cx: &mut App,
     ) {
         let new_bounds = self.object_fit.get_bounds(_bounds, self.source.size());
-        // TODO: Add support for corner_radii.
         let mut style = Style::default();
         style.refine(&self.style);
-        _window.with_element_opacity(style.opacity, |window| {
+        style.paint(_bounds, window, cx, |window, _| {
             window.paint_surface(new_bounds, self.source.clone());
         });
     }

@@ -18,7 +18,7 @@ pub(super) struct FrameUniformRequirements {
     pub(super) surface_count: u64,
 }
 
-const _: () = assert!(std::mem::size_of::<BlurUniforms>() == 112);
+const _: () = assert!(std::mem::size_of::<BlurUniforms>() == 128);
 
 impl WgpuRenderer {
     fn make_blur_bind_group(
@@ -148,8 +148,9 @@ impl WgpuRenderer {
         );
         let (bind_group, uniform_offset) = self.make_blur_bind_group(uniforms, &horizontal_target);
         let resources = self.resources();
+        let binding = resources.pipelines.smoothed_blur_composite.read();
         let pipeline = if uniforms.corner_smoothing > 0.0 {
-            &resources.pipelines.smoothed_blur_composite
+            binding.as_ref().unwrap_or(&resources.pipelines.blur_composite)
         } else {
             &resources.pipelines.blur_composite
         };
@@ -181,7 +182,7 @@ impl WgpuRenderer {
             scene_color_view,
             FilterCompositeParameters {
                 bounds: filter.bounds,
-                content_mask: filter.content_mask.bounds,
+                content_mask: filter.content_mask,
                 corner_radii: filter.corner_radii,
                 corner_smoothing: filter.corner_smoothing,
                 blur_radius: filter.max_blur_radius(),
