@@ -1,5 +1,6 @@
 use anyhow::Result;
 use parking_lot::{Mutex, RwLock};
+#[cfg(target_os = "windows")]
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -178,8 +179,10 @@ impl CameraCapture {
         let w = options.width;
         let h = options.height;
         let fps = options.fps.max(1);
+        #[cfg(target_os = "windows")]
         let camera_name = selected_name.clone();
-
+        #[cfg(not(target_os = "windows"))]
+        let _ = selected_name;
         std::thread::Builder::new()
             .name(format!("gpui-camera-capture-{id}"))
             .spawn(move || {

@@ -50,9 +50,6 @@ unsafe extern "C" fn get_format_callback(
                 ffmpeg_next::ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_DXVA2 => {
                     Some(ffmpeg_next::ffi::AVPixelFormat::AV_PIX_FMT_DXVA2_VLD)
                 }
-                ffmpeg_next::ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA => {
-                    Some(ffmpeg_next::ffi::AVPixelFormat::AV_PIX_FMT_D3D12)
-                }
                 ffmpeg_next::ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI => {
                     Some(ffmpeg_next::ffi::AVPixelFormat::AV_PIX_FMT_VAAPI)
                 }

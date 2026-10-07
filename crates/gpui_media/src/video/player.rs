@@ -157,7 +157,6 @@ impl VideoPlayer {
                         *position_secs.write() = target;
 
                         // Decode frame at seek position immediately
-                        #[cfg(target_os = "windows")]
                         let mut seek_hw = false;
                         #[cfg(target_os = "windows")]
                         if d3d11_hw_active {
