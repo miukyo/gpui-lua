@@ -21,7 +21,7 @@ export default defineConfig({
         link: '/playground/',
         activeMatch: '/playground/',
       },
-      { text: 'GitHub', link: 'https://github.com/miukyo/gpui-ce' },
+      { text: 'GitHub', link: 'https://github.com/miukyo/gpui-lua' },
     ],
     sidebar: {
       '/guide/': [
@@ -99,7 +99,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/miukyo/gpui-ce' },
+      { icon: 'github', link: 'https://github.com/miukyo/gpui-lua' },
     ],
     footer: {
       message: 'Released under the MIT and Apache 2.0 Licenses.',

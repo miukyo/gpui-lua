@@ -15,14 +15,14 @@ If you want to build desktop applications using pure Lua, you do not need Rust o
 
 Download the precompiled `gpui-lua` binary for Windows, macOS, or Linux directly from GitHub Releases:
 
-👉 **[Download `gpui-lua` Releases](https://github.com/miukyo/gpui-ce/releases)**
+👉 **[Download `gpui-lua` Releases](https://github.com/miukyo/gpui-lua/releases)**
 
 Place the executable in your `PATH` (or working directory).
 
 *(Optional)* If you already have a Rust toolchain installed, you can build from source:
 
 ```bash
-cargo install --git https://github.com/miukyo/gpui-ce gpui_lua
+cargo install --git https://github.com/miukyo/gpui-lua gpui_lua
 ```
 
 ### 2. Scaffold a Project
@@ -76,8 +76,8 @@ Because `gpui_lua` and the GPUI-CE fork are not published to crates.io, add the 
 
 ```toml
 [dependencies]
-gpui_lua = { git = "https://github.com/miukyo/gpui-ce" }
-gpui = { git = "https://github.com/miukyo/gpui-ce" }
+gpui_lua = { git = "https://github.com/miukyo/gpui-lua" }
+gpui = { git = "https://github.com/miukyo/gpui-lua" }
 ```
 
 ### Application Entrypoint

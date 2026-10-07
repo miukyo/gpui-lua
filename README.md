@@ -12,7 +12,7 @@ This repository is **not** the upstream GPUI-CE community edition. It is a perso
 
 ### 1. Standalone Lua CLI (`gpui-lua`)
 - **Zero compile toolchain needed**: No Rust toolchain or C/C++ compiler required.
-- **Download prebuilt binaries**: Directly from **[GitHub Releases](https://github.com/miukyo/gpui-ce/releases)**.
+- **Download prebuilt binaries**: Directly from **[GitHub Releases](https://github.com/miukyo/gpui-lua/releases)**.
 - **Commands**:
   - `gpui-lua init [name]` — Scaffolds project with `gpui.toml`, `main.lua`, and `gpui.d.lua` type definitions.
   - `gpui-lua dev [script]` — Runs live with filesystem watcher and hot reloading.
@@ -23,8 +23,8 @@ This repository is **not** the upstream GPUI-CE community edition. It is a perso
 - Add as a Git dependency pointing to this repository:
   ```toml
   [dependencies]
-  gpui_lua = { git = "https://github.com/miukyo/gpui-ce" }
-  gpui = { git = "https://github.com/miukyo/gpui-ce" }
+  gpui_lua = { git = "https://github.com/miukyo/gpui-lua" }
+  gpui = { git = "https://github.com/miukyo/gpui-lua" }
   ```
 
 ---
@@ -159,5 +159,5 @@ Running `gpui-lua build` automatically embeds:
 
 - **Documentation & Playground**: [`crates/gpui_lua/docs`](crates/gpui_lua/docs)
 - **GPUI Learn Examples**: [`crates/gpui/examples/learn`](crates/gpui/examples/learn)
-- **Releases**: [github.com/miukyo/gpui-ce/releases](https://github.com/miukyo/gpui-ce/releases)
+- **Releases**: [github.com/miukyo/gpui-lua/releases](https://github.com/miukyo/gpui-lua/releases)
 - **Upstream GPUI-CE**: [github.com/gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce)

@@ -6,16 +6,16 @@ High-performance GPU-accelerated Lua desktop runtime and single-binary packaging
 
 1. **Standalone Lua CLI (`gpui-lua`)**:
    - No Rust toolchain or C/C++ compiler needed.
-   - Download prebuilt binaries directly from [GitHub Releases](https://github.com/miukyo/gpui-ce/releases).
+   - Download prebuilt binaries directly from [GitHub Releases](https://github.com/miukyo/gpui-lua/releases).
    - Commands: `gpui-lua init [name]`, `gpui-lua dev`, `gpui-lua build`.
 
 2. **Rust Backend + Lua Frontend (Hybrid)**:
    - For Rust applications embedding GPUI-CE and Lua.
-   - Add as Git dependency from `https://github.com/miukyo/gpui-ce`:
+   - Add as Git dependency from `https://github.com/miukyo/gpui-lua`:
      ```toml
      [dependencies]
-     gpui_lua = { git = "https://github.com/miukyo/gpui-ce" }
-     gpui = { git = "https://github.com/miukyo/gpui-ce" }
+     gpui_lua = { git = "https://github.com/miukyo/gpui-lua" }
+     gpui = { git = "https://github.com/miukyo/gpui-lua" }
      ```
 ## Window Backgrounds & Backdrops
 

@@ -26,8 +26,8 @@ Add `gpui_lua` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-gpui_lua = { git = "https://github.com/miukyo/gpui-ce" }
-gpui = { git = "https://github.com/miukyo/gpui-ce" }
+gpui_lua = { git = "https://github.com/miukyo/gpui-lua" }
+gpui = { git = "https://github.com/miukyo/gpui-lua" }
 
 In your `main.rs`:
 
