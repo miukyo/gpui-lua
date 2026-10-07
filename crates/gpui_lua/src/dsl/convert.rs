@@ -74,7 +74,7 @@ pub trait LuaInvoker: 'static + Send + Sync {
 
 pub fn convert_node(node: LuaNode, invoker: Option<Arc<dyn LuaInvoker>>) -> AnyElement {
     let mut auto_id = 0u64;
-    convert_node_recursive(node, invoker, &mut auto_id)
+    convert_node_recursive(node, invoker, &mut auto_id, None)
 }
 
 fn length_to_definite(len: Length) -> Option<DefiniteLength> {
@@ -90,16 +90,17 @@ fn convert_node_recursive(
     node: LuaNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
+    inherited_font_family: Option<&str>,
 ) -> AnyElement {
     match node {
-        LuaNode::Text(text) => convert_text_node(text),
-        LuaNode::Div(div_node) => convert_div_node(div_node, invoker, auto_id),
+        LuaNode::Text(text) => convert_text_node(text, inherited_font_family),
+        LuaNode::Div(div_node) => convert_div_node(div_node, invoker, auto_id, inherited_font_family),
         LuaNode::Svg(svg_node) => convert_svg_node(svg_node, invoker.as_ref()),
         LuaNode::Img(img_node) => convert_img_node(img_node),
         LuaNode::Canvas(canvas_node) => convert_canvas_node(canvas_node, invoker),
         LuaNode::Video(video_node) => convert_video_node(video_node, invoker),
-        LuaNode::Input(input_node) => convert_input_node(input_node, invoker),
-        LuaNode::Custom(custom_node) => convert_custom_node(custom_node, invoker, auto_id),
+        LuaNode::Input(input_node) => convert_input_node(input_node, invoker, inherited_font_family),
+        LuaNode::Custom(custom_node) => convert_custom_node(custom_node, invoker, auto_id, inherited_font_family),
     }
 }
 
@@ -107,11 +108,13 @@ fn convert_custom_node(
     custom: crate::dsl::node::CustomNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
+    inherited_font_family: Option<&str>,
 ) -> AnyElement {
+    let effective_ff = custom.style.font_family.as_deref().or(inherited_font_family);
     let children_elements: Vec<AnyElement> = custom
         .children
         .into_iter()
-        .map(|ch| convert_node_recursive(ch, invoker.clone(), auto_id))
+        .map(|ch| convert_node_recursive(ch, invoker.clone(), auto_id, effective_ff))
         .collect();
 
     let cx = crate::dsl::custom::CustomElementContext {
@@ -496,7 +499,7 @@ fn convert_video_node(
     el.into_any_element()
 }
 
-fn convert_text_node(text: TextNode) -> AnyElement {
+fn convert_text_node(text: TextNode, inherited_font_family: Option<&str>) -> AnyElement {
     let mut el = div();
 
     if let Some(size) = text.size {
@@ -520,8 +523,9 @@ fn convert_text_node(text: TextNode) -> AnyElement {
     if let Some(lh) = text.line_height {
         el = el.line_height(px(lh));
     }
-    if let Some(ff) = text.font_family {
-        el = el.font_family(SharedString::from(ff));
+    let effective_ff = text.font_family.as_deref().or(inherited_font_family);
+    if let Some(ff) = effective_ff {
+        el = el.font_family(SharedString::from(ff.to_string()));
     }
     if let Some(ls) = text.letter_spacing {
         el = el.letter_spacing(px(ls));
@@ -540,6 +544,7 @@ fn convert_div_node(
     div_node: DivNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
     auto_id: &mut u64,
+    inherited_font_family: Option<&str>,
 ) -> AnyElement {
     let mut el = if let Some(id_str) = div_node.id {
         div().id(SharedString::from(id_str))
@@ -658,8 +663,9 @@ fn convert_div_node(
     if div_node.style.line_through {
         el = el.line_through();
     }
-    if let Some(ff) = &div_node.style.font_family {
-        el = el.font_family(SharedString::from(ff.clone()));
+    let effective_ff = div_node.style.font_family.as_deref().or(inherited_font_family);
+    if let Some(ff) = effective_ff {
+        el = el.font_family(SharedString::from(ff.to_string()));
     }
 
     // 5. Transitions
@@ -810,7 +816,7 @@ fn convert_div_node(
 
     // 7. Children
     for child in div_node.children {
-        el = el.child(convert_node_recursive(child, invoker.clone(), auto_id));
+        el = el.child(convert_node_recursive(child, invoker.clone(), auto_id, effective_ff));
     }
 
     // 8. Animations
@@ -837,9 +843,15 @@ fn convert_div_node(
     }
 }
 fn convert_input_node(
-    input_node: InputNode,
+    mut input_node: InputNode,
     invoker: Option<Arc<dyn LuaInvoker>>,
+    inherited_font_family: Option<&str>,
 ) -> AnyElement {
+    if input_node.style.font_family.is_none() {
+        if let Some(ff) = inherited_font_family {
+            input_node.style.font_family = Some(ff.to_string());
+        }
+    }
     if input_node.multiline {
         crate::input::TextareaElement::new(input_node, invoker).into_any_element()
     } else {

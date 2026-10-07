@@ -97,7 +97,29 @@ Vertical flex layout helper.
   - `items`: Align items mode.
   - `children`: Child elements array.
 ---
+---
 
+### `ui.load_font(path)` / `ui.add_font(path)`
+Loads a TrueType (`.ttf`) or OpenType (`.otf`) font from assets or filesystem.
+- **Parameters**: `path: string` — File path or embedded asset name.
+- **Returns**: `font_family: string` — The font family name extracted from the font metadata.
+- **Inheritance**: Setting `font_family = "FamilyName"` on any container automatically cascades down to all child elements (`ui.text`, `ui.Button`, `ui.input`, `ui.Card`, etc.) unless explicitly overridden.
+
+```lua
+local inter = ui.load_font("assets/fonts/Inter-Regular.ttf")
+
+function App()
+  return ui.div({
+    font_family = inter, -- all child elements inherit this font!
+    children = {
+      ui.text("Inherits Inter"),
+      ui.Button({ label = "Button inherits Inter" })
+    }
+  })
+end
+```
+
+---
 ### Custom Elements (`ui.<custom_element>`)
 
 Any native GPUI component registered from Rust via `app.register_element("name", ...)` is automatically exposed as a constructor on the `ui` module:

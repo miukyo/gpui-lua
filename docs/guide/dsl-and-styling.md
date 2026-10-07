@@ -68,6 +68,33 @@ ui.text("System Online")
   :color("#a6e3a1")
 ```
 
+## Custom Fonts & Font Inheritance
+
+Load custom TrueType (`.ttf`) or OpenType (`.otf`) fonts from assets or the filesystem using `ui.load_font(path)`. The loaded font family name is automatically extracted and returned:
+
+```lua
+-- Load custom font from assets (returns family name, e.g. "Inter")
+local font = ui.load_font("assets/fonts/Inter.ttf")
+
+function App()
+  return ui.div({
+    -- Set font family on the root container
+    font_family = font, -- or "Inter"
+    children = {
+      -- All children automatically inherit the parent's font family!
+      ui.text("This text inherits Inter!"),
+      ui.Button({ label = "Button text inherits Inter" }),
+      ui.Card({
+        title = "Card inherits Inter",
+        children = {
+          -- Can override font family on specific subtrees
+          ui.text("Mono code"):font_family("Fira Code")
+        }
+      })
+    }
+  })
+end
+```
 ## Standard UI Components
 
 The `ui` library includes pre-built components for common desktop patterns:

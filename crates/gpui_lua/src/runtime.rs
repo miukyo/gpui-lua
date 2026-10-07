@@ -46,6 +46,9 @@ pub struct LuaRuntime {
     csd_options: Arc<RwLock<CsdOptions>>,
     title: Arc<RwLock<String>>,
     async_engine: crate::stdlib::AsyncEngine,
+    text_system: Arc<RwLock<Option<Arc<gpui::TextSystem>>>>,
+    queued_fonts: Arc<RwLock<Vec<std::borrow::Cow<'static, [u8]>>>>,
+    loaded_font_names: Arc<RwLock<Vec<String>>>,
 }
 fn init_luau_package_system(lua: &Lua) -> mlua::Result<()> {
     let pkg = lua.create_table();
@@ -116,6 +119,9 @@ impl LuaRuntime {
         let csd_options = Arc::new(RwLock::new(CsdOptions::default()));
         let csd = Arc::new(AtomicBool::new(false));
         let title = Arc::new(RwLock::new("GPUI-CE".to_string()));
+        let text_system: Arc<RwLock<Option<Arc<gpui::TextSystem>>>> = Arc::new(RwLock::new(None));
+        let queued_fonts = Arc::new(RwLock::new(Vec::new()));
+        let loaded_font_names = Arc::new(RwLock::new(Vec::new()));
         let lua_arc = Arc::new(Mutex::new(lua));
         backend_bridge.set_lua(lua_arc.clone());
         async_engine.set_lua(lua_arc.clone());
@@ -136,6 +142,60 @@ impl LuaRuntime {
                 async_engine.clone(),
             )?;
             assets.register_lua_searcher(&lua_guard)?;
+
+            // Register ui.load_font, ui.add_font, font.load
+            let ts_for_load = text_system.clone();
+            let qf_for_load = queued_fonts.clone();
+            let fn_for_load = loaded_font_names.clone();
+            let assets_for_load = assets.clone();
+
+            let load_font_fn = lua_guard.create_function(move |_lua, src: String| {
+                let bytes: std::borrow::Cow<'static, [u8]> = if let Some(b) = assets_for_load.get(&src) {
+                    b
+                } else {
+                    let resolved = crate::runtime::resolve_script_path(Path::new(&src));
+                    if resolved.exists() {
+                        match std::fs::read(&resolved) {
+                            Ok(b) => std::borrow::Cow::Owned(b),
+                            Err(e) => return Err(mlua::Error::RuntimeError(format!("Failed to read font file '{}': {e}", resolved.display()))),
+                        }
+                    } else if let Ok(b) = std::fs::read(&src) {
+                        std::borrow::Cow::Owned(b)
+                    } else {
+                        return Err(mlua::Error::RuntimeError(format!("Font asset not found: '{src}'")));
+                    }
+                };
+
+                let family = crate::font::extract_font_family_name(&bytes)
+                    .unwrap_or_else(|| {
+                        Path::new(&src)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("CustomFont")
+                            .to_string()
+                    });
+
+                fn_for_load.write().push(family.clone());
+
+                if let Some(ref ts) = *ts_for_load.read() {
+                    if let Err(e) = ts.add_fonts(vec![bytes]) {
+                        return Err(mlua::Error::RuntimeError(format!("Failed to register font: {e}")));
+                    }
+                } else {
+                    qf_for_load.write().push(bytes);
+                }
+
+                Ok(family)
+            })?;
+
+            if let Ok(ui_tbl) = lua_guard.globals().get::<mlua::Table>("ui") {
+                ui_tbl.set("load_font", load_font_fn.clone())?;
+                ui_tbl.set("add_font", load_font_fn.clone())?;
+            }
+
+            let font_tbl = lua_guard.create_table();
+            font_tbl.set("load", load_font_fn)?;
+            lua_guard.globals().set("font", font_tbl)?;
         #[cfg(feature = "media")]
         {
             let _ = stdlib::register_media(&lua_guard, video.clone(), audio.clone());
@@ -201,6 +261,9 @@ impl LuaRuntime {
             csd_options,
             title,
             async_engine,
+            text_system,
+            queued_fonts,
+            loaded_font_names,
         }))
     }
 
@@ -254,6 +317,63 @@ impl LuaRuntime {
         let lua = self.lua.lock();
         let _ = crate::dsl::bind_custom_element_in_lua(&lua, &name);
     }
+
+    /// Sets or updates the GPUI text system and flushes any queued fonts immediately.
+    pub fn init_text_system(&self, text_system: Arc<gpui::TextSystem>) {
+        *self.text_system.write() = Some(text_system.clone());
+        let queued = std::mem::take(&mut *self.queued_fonts.write());
+        if !queued.is_empty() {
+            let _ = text_system.add_fonts(queued);
+        }
+    }
+
+    /// Returns all registered/loaded font family names.
+    pub fn loaded_font_names(&self) -> Vec<String> {
+        self.loaded_font_names.read().clone()
+    }
+
+    /// Load a font from embedded assets or from the filesystem by path.
+    pub fn load_font(&self, src: &str) -> anyhow::Result<String> {
+        let bytes: std::borrow::Cow<'static, [u8]> = if let Some(b) = self.assets.get(src) {
+            b
+        } else {
+            let resolved = crate::runtime::resolve_script_path(Path::new(src));
+            if resolved.exists() {
+                std::borrow::Cow::Owned(std::fs::read(&resolved)?)
+            } else if Path::new(src).exists() {
+                std::borrow::Cow::Owned(std::fs::read(src)?)
+            } else {
+                anyhow::bail!("Font asset not found: '{src}'");
+            }
+        };
+
+        self.load_font_bytes(bytes)
+    }
+
+    /// Load a font from a filesystem path.
+    pub fn load_font_file(&self, path: impl AsRef<Path>) -> anyhow::Result<String> {
+        let path = path.as_ref();
+        let bytes = std::fs::read(path)?;
+        self.load_font_bytes(std::borrow::Cow::Owned(bytes))
+    }
+
+    /// Load raw TrueType / OpenType font bytes.
+    pub fn load_font_bytes(&self, bytes: impl Into<std::borrow::Cow<'static, [u8]>>) -> anyhow::Result<String> {
+        let bytes = bytes.into();
+        let family = crate::font::extract_font_family_name(&bytes)
+            .unwrap_or_else(|| "CustomFont".to_string());
+
+        self.loaded_font_names.write().push(family.clone());
+
+        if let Some(ref ts) = *self.text_system.read() {
+            ts.add_fonts(vec![bytes])?;
+        } else {
+            self.queued_fonts.write().push(bytes);
+        }
+
+        Ok(family)
+    }
+
     pub fn os_bridge(&self) -> &OsBridge {
         &self.os_bridge
     }
@@ -658,9 +778,9 @@ pub struct LuaView {
 
 impl LuaView {
     pub fn new(runtime: Arc<LuaRuntime>, cx: &mut Context<Self>) -> Self {
+        runtime.init_text_system(cx.text_system().clone());
         let (tx, rx) = async_channel::unbounded::<()>();
         runtime.bridge().set_sender(tx);
-
         let task = cx.spawn(async move |weak_view, async_app| {
             while let Ok(()) = rx.recv().await {
                 // Coalesce queued frame / signal notifications to prevent lagging
@@ -1065,6 +1185,7 @@ impl Render for LuaView {
             self.runtime.audio().collect_idle();
         }
 
+        self.runtime.init_text_system(cx.text_system().clone());
 
         if let Some(err) = self.runtime.current_error() {
             return render_error_view(&err);
@@ -1382,5 +1503,31 @@ mod test_conference {
             mic:stop()
             peer:close()
         "#).exec().expect("camera, microphone and webrtc stream binding test failed");
+    }
+
+    #[test]
+    fn test_font_loading_lua_api() {
+        let runtime = LuaRuntime::new().unwrap();
+
+        let mut mock_ttf = Vec::new();
+        mock_ttf.extend_from_slice(&[0x00, 0x01, 0x00, 0x00, 0, 1, 0, 0, 0, 0, 0, 0]);
+        mock_ttf.extend_from_slice(b"name");
+        mock_ttf.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 100]);
+        mock_ttf.extend_from_slice(&[0, 0, 0, 1, 0, 18]);
+        mock_ttf.extend_from_slice(&[0, 3, 0, 1, 0x04, 0x09, 0, 1, 0, 10, 0, 0]);
+        for c in "Inter".encode_utf16() {
+            mock_ttf.extend_from_slice(&c.to_be_bytes());
+        }
+
+        let family = runtime.load_font_bytes(mock_ttf).unwrap();
+        assert_eq!(family, "Inter");
+        assert!(runtime.loaded_font_names().contains(&"Inter".to_string()));
+
+        let lua = runtime.lua();
+        let lua = lua.lock();
+        lua.load(r#"
+            assert(type(ui.load_font) == "function", "ui.load_font must exist")
+            assert(type(font.load) == "function", "font.load must exist")
+        "#).exec().expect("font API test failed");
     }
 }

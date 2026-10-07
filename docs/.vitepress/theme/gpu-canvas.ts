@@ -664,7 +664,8 @@ export class GpuCanvasRenderer {
     size: number,
     color: [number, number, number, number],
     bold: boolean,
-    align: 'left' | 'center' = 'left'
+    align: 'left' | 'center' = 'left',
+    fontFamily?: string
   ): void {
     if (!this.gl || !this.program || !this.textCtx || !this.textTexture || !this.vao || !this.vbo || !text) return;
     const gl = this.gl;
@@ -672,8 +673,7 @@ export class GpuCanvasRenderer {
     const dpr = this.dpr;
 
     // Rasterize at high-DPI resolution
-    const fontStr = `${bold ? '600 ' : '400 '}${Math.round(size * dpr)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-    ctx.font = fontStr;
+    const fontStr = `${bold ? '600 ' : '400 '}${Math.round(size * dpr)}px ${fontFamily ? `"${fontFamily}", ` : ''}-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
 
     const metrics = ctx.measureText(text);
     const physicalW = Math.max(1, Math.ceil(metrics.width));

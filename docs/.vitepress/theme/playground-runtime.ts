@@ -43,6 +43,7 @@ export interface SerializedNode {
   justifyEnd?: boolean;
   justify_end?: boolean;
   fontSize?: number;
+  fontFamily?: string;
   bold?: boolean;
   variant?: string;
   disabled?: boolean;
@@ -219,6 +220,7 @@ export class PlaygroundRuntime {
       function ElementBuilder:shadow_md() self.props.shadow_md = true; return self end
       function ElementBuilder:bold() self.props.bold = true; return self end
       function ElementBuilder:size(s) self.props.font_size = s; return self end
+      function ElementBuilder:font_family(name) self.props.font_family = name; return self end
       function ElementBuilder:on_click(fn)
         local id = __next_click_id
         __next_click_id = __next_click_id + 1
@@ -261,6 +263,7 @@ export class PlaygroundRuntime {
           itemsCenter = p.items_center,
           justifyCenter = p.justify_center,
           fontSize = p.font_size,
+          fontFamily = p.font_family,
           bold = p.bold,
           variant = p.variant,
           disabled = p.disabled,
@@ -313,6 +316,11 @@ export class PlaygroundRuntime {
           px = 8, py = 3, rounded = 999
         })
       end
+      function ui.load_font(path)
+        return path:match("([^/\\]+)%.%w+$") or path
+      end
+      ui.add_font = ui.load_font
+      font = { load = ui.load_font }
 
       -- User code
       ${userCode}

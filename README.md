@@ -90,6 +90,8 @@ fn main() -> anyhow::Result<()> {
     let app = LuaApp::new("main.lua")
         .title("Rust + GPUI.lua App")
         .windows_background(WindowsWindowBackground::Acrylic)
+        // Load custom TrueType / OpenType font from assets or path
+        .with_font("assets/fonts/Inter.ttf")
         // Register custom native GPUI component callable in Lua via ui.my_widget(props)
         .register_element("my_widget", |cx: CustomElementContext| {
             let label = cx.get_str("label").unwrap_or("Default");
@@ -108,11 +110,17 @@ fn main() -> anyhow::Result<()> {
 In Lua:
 
 ```lua
+-- Or load fonts directly from Lua (returns font family name):
+local font = ui.load_font("assets/fonts/Inter.ttf")
+
 function App()
   return ui.div({
+    -- All child elements automatically inherit parent's font family!
+    font_family = font,
     children = {
       ui.my_widget({ label = "Native Rust Widget" }),
-      ui.my_widget():prop("label", "Chained syntax"):child(ui.text("Child"))
+      ui.text("Inherits Inter font"),
+      ui.Button({ label = "Button text inherits Inter" })
     }
   })
 end

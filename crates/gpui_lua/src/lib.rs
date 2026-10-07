@@ -12,8 +12,10 @@ pub mod input;
 pub mod net;
 pub mod reactive;
 pub mod runtime;
+pub mod font;
 pub mod stdlib;
 
+pub use font::{extract_font_family_name, FontSource};
 pub use dsl::{CustomElementContext, CustomElementRenderer, register_custom_element, LuaElementBuilder, LuaNode};
 pub use hot_reload::{HotReloadError, ScriptWatcher};
 pub use reactive::{ReactiveBridge, ReactiveStore};

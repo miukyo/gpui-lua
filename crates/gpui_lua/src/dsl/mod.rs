@@ -459,4 +459,31 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_font_family_inheritance() -> mlua::Result<()> {
+        let lua = Lua::new();
+        register(&lua)?;
+
+        let result: LuaElementBuilder = lua.load(r#"
+            return ui.div({ font_family = "ParentFont" }):child(
+                ui.div():child(ui.text("Grandchild"))
+            ):child(
+                ui.text("Child Text")
+            ):child(
+                ui.div({ font_family = "OverriddenFont" }):child(ui.text("Overridden Grandchild"))
+            )
+        "#).eval()?;
+
+        let node = result.to_node();
+        if let LuaNode::Div(parent_div) = &node {
+            assert_eq!(parent_div.style.font_family.as_deref(), Some("ParentFont"));
+        } else {
+            panic!("Expected parent div");
+        }
+
+        // Verify conversion with inheritance succeeds
+        let _any_el = convert_node(node, None);
+        Ok(())
+    }
 }

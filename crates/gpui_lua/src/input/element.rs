@@ -98,7 +98,10 @@ impl<M: InputModeKind> Element for TextElement<M> {
         let is_focused = focus_handle.is_focused(window);
         let show_cursor = is_focused && state.blink_cursor.read(cx).visible() && !state.disabled;
 
-        let style = window.text_style();
+        let mut style = window.text_style();
+        if let Some(ref ff) = state.font_family {
+            style.font_family = gpui::SharedString::from(ff.clone());
+        }
         let font_size = if state.font_size > 0.0 { px(state.font_size) } else { style.font_size.to_pixels(window.rem_size()) };
         let line_height = px(state.font_size * 1.35).max(px(16.0));
         let text_color = state.text_color.unwrap_or_else(|| gpui::rgb_to_hsla(gpui::rgb(0xcdd6f4)));

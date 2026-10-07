@@ -326,6 +326,23 @@ impl LuaApp {
         self
     }
 
+    /// Load a TrueType or OpenType font from a file path or asset name.
+    pub fn load_font(self, path: impl AsRef<Path>) -> Self {
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        let _ = self.runtime.load_font(&path_str);
+        self
+    }
+
+    /// Alias for `load_font`.
+    pub fn with_font(self, path: impl AsRef<Path>) -> Self {
+        self.load_font(path)
+    }
+
+    /// Load raw TrueType or OpenType font bytes.
+    pub fn with_font_bytes(self, bytes: impl Into<std::borrow::Cow<'static, [u8]>>) -> Self {
+        let _ = self.runtime.load_font_bytes(bytes);
+        self
+    }
     #[cfg(target_os = "windows")]
     /// Set Windows background appearance (Opaque, Transparent, Blurred/Acrylic, Mica, MicaAlt).
     pub fn windows_background(mut self, bg: gpui::WindowsWindowBackground) -> Self {
@@ -495,6 +512,7 @@ impl LuaApp {
         let default_size = self.default_size;
         let mut window_options = self.window_options;
         app.run(move |cx: &mut App| {
+            runtime_clone.init_text_system(cx.text_system().clone());
             let _tokio_guard = crate::tokio_runtime().enter();
             cx.activate(true);
             cx.on_window_closed(|cx, _window_id| {

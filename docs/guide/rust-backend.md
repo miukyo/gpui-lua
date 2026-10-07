@@ -39,6 +39,7 @@ fn main() -> anyhow::Result<()> {
     let app = LuaApp::new("frontend.lua")
         .title("Rust + GPUI.lua Hybrid")
         .size(900.0, 600.0)
+        .with_font("assets/fonts/Inter.ttf")
         .windows_background(gpui::WindowsWindowBackground::Acrylic)
         .hot_reload(true);
 
@@ -123,6 +124,17 @@ function App()
 end
 ```
 
+## Loading Custom Fonts from Rust
+
+Load TrueType or OpenType fonts directly from file paths or compiled-in bytes:
+
+```rust
+let app = LuaApp::new("app.lua")
+    .with_font("assets/fonts/Inter.ttf")
+    .with_font_bytes(include_bytes!("../assets/fonts/Mono.ttf"));
+```
+
+Fonts registered in Rust become immediately available in Lua stylesheets, and children elements inherit parent `font_family` settings.
 ## Rust Backend Bridge (`BackendBridge`)
 
 Use `BackendBridge` to dispatch asynchronous tasks from background threads and trigger re-renders:

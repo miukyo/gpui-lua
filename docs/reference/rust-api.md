@@ -38,8 +38,11 @@ use gpui_lua::app::LuaApp;
   - `.macos_material(mat: gpui::MacosVisualEffectMaterial) -> Self`
 - Linux:
   - `.linux_background(bg: gpui::LinuxWindowBackground) -> Self`
+### Font Management
+- `.with_font(self, path: impl AsRef<Path>) -> Self`: Load TrueType / OpenType font from file or asset.
+- `.load_font(self, path: impl AsRef<Path>) -> Self`: Alias for `with_font`.
+- `.with_font_bytes(self, bytes: impl Into<Cow<'static, [u8]>>) -> Self`: Load font from in-memory bytes.
 
-### Custom GPUI Elements
 - `.register_element<F, E>(self, name: impl Into<String>, renderer: F) -> Self`
   Registers a custom GPUI element available in Lua under `ui.<name>(props_or_children)`.
 

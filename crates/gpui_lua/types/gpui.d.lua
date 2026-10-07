@@ -1039,6 +1039,15 @@ function ui.column(props) end
 ---@return LuaElementBuilder
 function ui.stack(props) end
 
+---Load a TrueType or OpenType font from assets or filesystem. Returns the font family name.
+---@param path string Path to font file or embedded asset name
+---@return string font_family The loaded font family name
+function ui.load_font(path) end
+
+---Alias for ui.load_font
+---@param path string
+---@return string font_family
+function ui.add_font(path) end
 --------------------------------------------------------------------------------
 -- Reactive System
 --------------------------------------------------------------------------------
