@@ -1,3 +1,4 @@
+#![allow(unused_variables, unused_imports, dead_code)]
 use crate::dsl::node::SyncRegistryKey;
 use crate::reactive::bridge::ReactiveBridge;
 use mlua::{Function, Lua, Result, Table, UserData, UserDataMethods, Value};
@@ -650,10 +651,16 @@ impl UserData for LuaPeerConnection {
 
 impl LuaPeerConnection {
     fn add_track_internal(&self, source: Value) -> Result<LuaLocalTrack> {
-        let pc = self.pc.clone();
-        let track_id = format!("track_{}", NEXT_TRACK_ID.fetch_add(1, Ordering::SeqCst));
+        #[cfg(not(feature = "media"))]
+        {
+            let _ = (source, &self.pc);
+            return Err(mlua::Error::RuntimeError("Media feature not enabled for WebRTC add_track".to_string()));
+        }
 
         #[cfg(feature = "media")]
+        {
+            let pc = self.pc.clone();
+            let track_id = format!("track_{}", NEXT_TRACK_ID.fetch_add(1, Ordering::SeqCst));
         if let Value::UserData(ud) = &source {
             if let Ok(cam) = ud.borrow::<LuaCameraCapture>() {
                 let track_meta = MediaStreamTrack::new(
@@ -766,7 +773,8 @@ impl LuaPeerConnection {
             }
         }
 
-        Err(mlua::Error::RuntimeError("Unsupported media source for add_track. Pass camera or microphone.".to_string()))
+            Err(mlua::Error::RuntimeError("Unsupported media source for add_track. Pass camera or microphone.".to_string()))
+        }
     }
 }
 

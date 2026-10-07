@@ -1,3 +1,4 @@
+#![allow(unused_variables, unused_imports)]
 use mlua::{Lua, Result, Table, UserData, UserDataMethods, Value};
 use std::sync::Arc;
 

@@ -66,16 +66,23 @@ jobs:
             libasound2-dev libssl-dev pkg-config \
             libavcodec-dev libavformat-dev libavutil-dev \
             libswscale-dev libswresample-dev libavdevice-dev libavfilter-dev
-          echo "FFMPEG_DIR=" >> $GITHUB_ENV
+          # Link multiarch headers into /usr/include for ffmpeg-sys-next fallback search
+          sudo ln -sf /usr/include/x86_64-linux-gnu/libav* /usr/include/ || true
+          sudo ln -sf /usr/include/x86_64-linux-gnu/libsw* /usr/include/ || true
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/x86_64-linux-gnu" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=/usr/include/x86_64-linux-gnu:$C_INCLUDE_PATH" >> $GITHUB_ENV
+          echo "FFMPEG_DIR=/usr" >> $GITHUB_ENV
 
       - name: Install macOS system dependencies
         if: runner.os == 'macOS'
         run: |
           brew install ffmpeg pkg-config
-          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "FFMPEG_DIR=" >> $GITHUB_ENV
+          FFMPEG_PREFIX=$(brew --prefix ffmpeg)
+          echo "FFMPEG_DIR=$FFMPEG_PREFIX" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I$FFMPEG_PREFIX/include" >> $GITHUB_ENV
 
-      - name: Install Windows FFmpeg dependencies
+      - name: Install Windows FFmpeg and Clang headers
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -89,9 +96,14 @@ jobs:
           "INCLUDE=$ffmpegTarget\include;$env:INCLUDE" >> $env:GITHUB_ENV
           "LIB=$ffmpegTarget\lib;$env:LIB" >> $env:GITHUB_ENV
           "PATH=$ffmpegTarget\bin;$env:PATH" >> $env:GITHUB_ENV
+
+          # Pass UCRT and MSVC headers to bindgen / libclang so errno.h is found
+          $ucrt = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\*\ucrt" | Select-Object -Last 1).FullName.Replace('\', '/')
+          $msvc = (Get-ChildItem "C:\Program Files*\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*\include" | Select-Object -Last 1).FullName.Replace('\', '/')
+          "BINDGEN_EXTRA_CLANG_ARGS=-I`"$ffmpegTarget/include`" -I`"$ucrt`" -I`"$msvc`"" >> $env:GITHUB_ENV
+
       - name: Build gpui-lua binary
         run: cargo build --release -p gpui_lua --bin gpui-lua
-
       - name: Package binary (Unix)
         if: runner.os != 'Windows'
         run: |
