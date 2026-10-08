@@ -417,13 +417,13 @@ function scrollLogsToBottom(): void {
   flex-direction: column;
   height: calc(100vh - 120px);
   min-height: 700px;
-  background-color: #11111b;
-  color: #cdd6f4;
+  background-color: #09090b;
+  color: #fafafa;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #313244;
+  border: 1px solid #27272a;
   margin: 1rem 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 /* Topbar */
@@ -431,9 +431,9 @@ function scrollLogsToBottom(): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #181825;
+  background-color: #121214;
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid #27272a;
   flex-wrap: wrap;
   gap: 0.8rem;
 }
@@ -447,14 +447,14 @@ function scrollLogsToBottom(): void {
 
 .topbar-label {
   font-size: 0.85rem;
-  color: #a6adc8;
+  color: #a1a1aa;
   font-weight: 600;
 }
 
 .backdrop-select {
-  background-color: #1e1e2e;
-  color: #cdd6f4;
-  border: 1px solid #45475a;
+  background-color: #18181b;
+  color: #fafafa;
+  border: 1px solid #27272a;
   border-radius: 6px;
   padding: 0.35rem 0.6rem;
   font-size: 0.85rem;
@@ -463,12 +463,12 @@ function scrollLogsToBottom(): void {
 }
 
 .backdrop-select:focus {
-  border-color: #89b4fa;
+  border-color: #ffffff;
 }
 
 .preset-desc {
   font-size: 0.8rem;
-  color: #6c7086;
+  color: #71717a;
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -480,13 +480,13 @@ function scrollLogsToBottom(): void {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.8rem;
-  color: #a6adc8;
+  color: #a1a1aa;
   cursor: pointer;
   user-select: none;
 }
 
 .toggle-label input[type='checkbox'] {
-  accent-color: #89b4fa;
+  accent-color: #ffffff;
 }
 
 /* Status Pill */
@@ -509,36 +509,33 @@ function scrollLogsToBottom(): void {
 }
 
 .status-ready {
-  background-color: rgba(166, 227, 161, 0.15);
-  color: #a6e3a1;
-  border: 1px solid rgba(166, 227, 161, 0.3);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid #3f3f46;
 }
 .status-ready .status-dot {
-  background-color: #a6e3a1;
-  box-shadow: 0 0 6px #a6e3a1;
+  background-color: #ffffff;
+  box-shadow: 0 0 6px #ffffff;
 }
-
 .status-evaluating,
 .status-init {
-  background-color: rgba(249, 226, 175, 0.15);
-  color: #f9e2af;
-  border: 1px solid rgba(249, 226, 175, 0.3);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #a1a1aa;
+  border: 1px solid #27272a;
 }
 .status-evaluating .status-dot,
 .status-init .status-dot {
-  background-color: #f9e2af;
-  animation: pulse 1s infinite alternate;
+  background-color: #a1a1aa;
 }
 
 .status-error {
-  background-color: rgba(243, 139, 168, 0.15);
-  color: #f38ba8;
-  border: 1px solid rgba(243, 139, 168, 0.3);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #e4e4e7;
+  border: 1px solid #52525b;
 }
 .status-error .status-dot {
-  background-color: #f38ba8;
+  background-color: #e4e4e7;
 }
-
 @keyframes pulse {
   from { opacity: 0.4; }
   to { opacity: 1; }
@@ -554,35 +551,32 @@ function scrollLogsToBottom(): void {
   transition: all 0.15s ease;
   border: none;
 }
-
 .btn-primary {
-  background-color: #89b4fa;
-  color: #11111b;
+  background-color: #ffffff;
+  color: #000000;
 }
 .btn-primary:hover {
-  background-color: #b4befe;
+  background-color: #e4e4e7;
 }
-
 .btn-secondary {
-  background-color: #313244;
-  color: #cdd6f4;
-  border: 1px solid #45475a;
+  background-color: #18181b;
+  color: #fafafa;
+  border: 1px solid #27272a;
 }
 .btn-secondary:hover {
-  background-color: #45475a;
+  background-color: #27272a;
 }
-
 .btn-text {
   background: transparent;
   border: none;
-  color: #89b4fa;
+  color: #fafafa;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
 }
 .btn-text:hover {
-  background-color: rgba(137, 180, 250, 0.1);
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Panes */
@@ -590,7 +584,7 @@ function scrollLogsToBottom(): void {
   display: flex;
   flex: 1;
   min-height: 0;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid #27272a;
 }
 
 .pane {
@@ -602,31 +596,29 @@ function scrollLogsToBottom(): void {
 }
 
 .pane-editor {
-  border-right: 1px solid #313244;
-  background-color: #181825;
+  border-right: 1px solid #27272a;
+  background-color: #09090b;
 }
-
 .editor-header,
 .preview-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0.45rem 0.8rem;
-  background-color: #1e1e2e;
-  border-bottom: 1px solid #313244;
+  background-color: #121214;
+  border-bottom: 1px solid #27272a;
   font-size: 0.8rem;
-  color: #a6adc8;
+  color: #a1a1aa;
 }
 
 .editor-title,
 .toolbar-title {
   font-weight: 600;
-  color: #cdd6f4;
+  color: #fafafa;
 }
-
 .editor-hint {
   font-size: 0.75rem;
-  color: #6c7086;
+  color: #71717a;
 }
 
 .editor-container {
@@ -645,7 +637,7 @@ function scrollLogsToBottom(): void {
 
 /* Preview Pane */
 .pane-preview {
-  background-color: #11111b;
+  background-color: #000000;
 }
 
 .toolbar-group {
@@ -656,7 +648,7 @@ function scrollLogsToBottom(): void {
 
 .toolbar-label {
   font-size: 0.8rem;
-  color: #a6adc8;
+  color: #a1a1aa;
 }
 
 .viewport-wrapper {
@@ -665,7 +657,7 @@ function scrollLogsToBottom(): void {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: radial-gradient(circle at 50% 50%, #1e1e2e 0%, #11111b 100%);
+  background: radial-gradient(circle at 50% 50%, #121214 0%, #000000 100%);
   overflow: hidden;
   position: relative;
 }
@@ -676,7 +668,7 @@ function scrollLogsToBottom(): void {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  border: 1px solid #313244;
+  border: 1px solid #27272a;
   position: relative;
   display: flex;
   align-items: center;
@@ -697,12 +689,11 @@ function scrollLogsToBottom(): void {
   align-items: flex-start;
   gap: 1rem;
   max-width: 480px;
-  background-color: rgba(243, 139, 168, 0.1);
-  border: 1px solid #f38ba8;
+  background-color: #121214;
+  border: 1px solid #3f3f46;
   border-radius: 8px;
   padding: 1.2rem;
-  color: #cdd6f4;
-}
+  color: #fafafa;
 
 .callout-icon {
   font-size: 1.6rem;
@@ -711,13 +702,13 @@ function scrollLogsToBottom(): void {
 .callout-content h3 {
   margin: 0 0 0.4rem 0;
   font-size: 1rem;
-  color: #f38ba8;
+  color: #ffffff;
 }
 
 .callout-content p {
   margin: 0;
   font-size: 0.85rem;
-  color: #a6adc8;
+  color: #a1a1aa;
   line-height: 1.4;
 }
 
@@ -725,8 +716,8 @@ function scrollLogsToBottom(): void {
 .log-drawer {
   display: flex;
   flex-direction: column;
-  background-color: #181825;
-  border-top: 1px solid #313244;
+  background-color: #09090b;
+  border-top: 1px solid #27272a;
   transition: max-height 0.2s ease;
   max-height: 180px;
   height: 100%;
@@ -741,8 +732,8 @@ function scrollLogsToBottom(): void {
   justify-content: space-between;
   align-items: center;
   padding: 0.35rem 0.8rem;
-  background-color: #1e1e2e;
-  border-bottom: 1px solid #313244;
+  background-color: #121214;
+  border-bottom: 1px solid #27272a;
   cursor: pointer;
   user-select: none;
 }
@@ -750,14 +741,14 @@ function scrollLogsToBottom(): void {
 .drawer-title {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #a6adc8;
+  color: #a1a1aa;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
 .log-count {
-  color: #6c7086;
+  color: #71717a;
   font-weight: normal;
 }
 
@@ -775,7 +766,7 @@ function scrollLogsToBottom(): void {
 }
 
 .log-empty {
-  color: #6c7086;
+  color: #71717a;
   font-style: italic;
   padding: 0.4rem 0;
 }
@@ -789,7 +780,7 @@ function scrollLogsToBottom(): void {
 }
 
 .log-time {
-  color: #6c7086;
+  color: #71717a;
   font-size: 11px;
 }
 
@@ -800,23 +791,25 @@ function scrollLogsToBottom(): void {
   border-radius: 3px;
 }
 
-.log-info .log-badge {
-  background-color: rgba(137, 180, 250, 0.2);
-  color: #89b4fa;
+  background-color: #18181b;
+  color: #ffffff;
+  border: 1px solid #3f3f46;
 }
 
 .log-reactive .log-badge {
-  background-color: rgba(166, 227, 161, 0.2);
-  color: #a6e3a1;
+  background-color: #27272a;
+  color: #e4e4e7;
+  border: 1px solid #3f3f46;
 }
 
 .log-error .log-badge {
-  background-color: rgba(243, 139, 168, 0.2);
-  color: #f38ba8;
+  background-color: #27272a;
+  color: #ffffff;
+  border: 1px solid #52525b;
 }
 
 .log-msg {
-  color: #cdd6f4;
+  color: #fafafa;
   word-break: break-all;
 }
 
@@ -826,7 +819,7 @@ function scrollLogsToBottom(): void {
   }
   .pane-editor {
     border-right: none;
-    border-bottom: 1px solid #313244;
+    border-bottom: 1px solid #27272a;
     height: 50%;
   }
 }

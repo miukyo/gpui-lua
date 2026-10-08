@@ -38,8 +38,8 @@ features:
 ---
 
 <div style="margin-top: 40px;">
-  <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 12px; color: #cdd6f4;">Try GPUI.lua in Your Browser</h2>
-  <p style="color: #a6adc8; margin-bottom: 20px;">
+  <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 12px; color: var(--vp-c-text-1);">Try GPUI.lua in Your Browser</h2>
+  <p style="color: var(--vp-c-text-2); margin-bottom: 20px;">
     The live dual-engine playground runs the full Lua DSL inside a WebAssembly LuaJIT engine with live reactive state updates.
   </p>
   <Playground />

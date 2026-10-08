@@ -90,7 +90,12 @@ export class PlaygroundRuntime {
   public async init(): Promise<void> {
     if (this.isInitialized) return;
 
-    const base = typeof window !== 'undefined' && window.location.pathname.startsWith('/gpui.lua/') ? '/gpui.lua/' : '/';
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    const base = path.startsWith('/gpui-lua/')
+      ? '/gpui-lua/'
+      : path.startsWith('/gpui.lua/')
+      ? '/gpui.lua/'
+      : '/';
     await init({ module_or_path: `${base}ulua_web_bg.wasm` });
     this.isInitialized = true;
   }

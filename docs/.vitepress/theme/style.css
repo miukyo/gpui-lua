@@ -1,48 +1,79 @@
 :root {
-  --vp-c-brand-1: #89b4fa;
-  --vp-c-brand-2: #b4befe;
-  --vp-c-brand-3: #74c7ec;
-  --vp-c-brand-soft: rgba(137, 180, 250, 0.14);
+  --vp-c-brand-1: #09090b;
+  --vp-c-brand-2: #27272a;
+  --vp-c-brand-3: #52525b;
+  --vp-c-brand-soft: rgba(0, 0, 0, 0.06);
 
-  --vp-c-bg: #1e1e2e;
-  --vp-c-bg-alt: #181825;
-  --vp-c-bg-elv: #313244;
-  --vp-c-bg-soft: #313244;
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #fafafa;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f4f4f5;
 
-  --vp-c-border: #45475a;
-  --vp-c-divider: #313244;
-  --vp-c-gutter: #11111b;
+  --vp-c-border: #e4e4e7;
+  --vp-c-divider: #e4e4e7;
+  --vp-c-gutter: #f4f4f5;
 
-  --vp-c-text-1: #cdd6f4;
-  --vp-c-text-2: #a6adc8;
-  --vp-c-text-3: #6c7086;
+  --vp-c-text-1: #09090b;
+  --vp-c-text-2: #52525b;
+  --vp-c-text-3: #71717a;
 
-  --vp-code-block-bg: #11111b;
+  --vp-code-block-bg: #f4f4f5;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #09090b 20%, #71717a 100%);
 }
 
 .dark {
-  --vp-c-brand-1: #89b4fa;
-  --vp-c-brand-2: #b4befe;
-  --vp-c-brand-3: #74c7ec;
-  --vp-c-brand-soft: rgba(137, 180, 250, 0.14);
+  --vp-c-brand-1: #ffffff;
+  --vp-c-brand-2: #e4e4e7;
+  --vp-c-brand-3: #a1a1aa;
+  --vp-c-brand-soft: rgba(255, 255, 255, 0.12);
 
-  --vp-c-bg: #1e1e2e;
-  --vp-c-bg-alt: #181825;
-  --vp-c-bg-elv: #313244;
-  --vp-c-bg-soft: #313244;
+  --vp-c-bg: #09090b;
+  --vp-c-bg-alt: #000000;
+  --vp-c-bg-elv: #121214;
+  --vp-c-bg-soft: #18181b;
 
-  --vp-c-border: #45475a;
-  --vp-c-divider: #313244;
-  --vp-c-gutter: #11111b;
+  --vp-c-border: #27272a;
+  --vp-c-divider: #27272a;
+  --vp-c-gutter: #000000;
 
-  --vp-c-text-1: #cdd6f4;
-  --vp-c-text-2: #a6adc8;
-  --vp-c-text-3: #6c7086;
+  --vp-c-text-1: #fafafa;
+  --vp-c-text-2: #a1a1aa;
+  --vp-c-text-3: #71717a;
 
-  --vp-code-block-bg: #11111b;
+  --vp-code-block-bg: #000000;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #ffffff 20%, #71717a 100%);
 }
 
-/* Custom badges and tags */
+/* Monochrome hero buttons */
+.VPButton.brand {
+  border-color: var(--vp-c-brand-1) !important;
+  background-color: var(--vp-c-brand-1) !important;
+  color: var(--vp-c-bg) !important;
+  font-weight: 600 !important;
+}
+
+.VPButton.brand:hover {
+  border-color: var(--vp-c-brand-2) !important;
+  background-color: var(--vp-c-brand-2) !important;
+  color: var(--vp-c-bg) !important;
+}
+
+.VPButton.alt {
+  border: 1px solid var(--vp-c-border) !important;
+  background-color: transparent !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+.VPButton.alt:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  background-color: var(--vp-c-brand-soft) !important;
+}
+
+/* Monochrome Custom badges and tags */
 .badge-tech {
   display: inline-block;
   font-size: 11px;
@@ -52,20 +83,56 @@
   padding: 2px 8px;
   border-radius: 9999px;
   margin-right: 6px;
-  background-color: #313244;
-  color: #89b4fa;
-  border: 1px solid #45475a;
+  background-color: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+  border: 1px solid var(--vp-c-border);
 }
 
 /* Feature grid enhancements */
 .VPFeature {
-  background-color: #181825 !important;
-  border: 1px solid #313244 !important;
-  border-radius: 12px !important;
-  transition: transform 0.2s ease, border-color 0.2s ease !important;
+  background-color: var(--vp-c-bg-elv) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .VPFeature:hover {
-  border-color: #89b4fa !important;
+  border-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   transform: translateY(-2px);
+}
+
+/* Callouts / custom containers in monochrome */
+.custom-block.tip,
+.custom-block.info {
+  border-color: var(--vp-c-border) !important;
+  background-color: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+}
+
+.custom-block.tip .custom-block-title,
+.custom-block.info .custom-block-title {
+  color: var(--vp-c-text-1) !important;
+}
+
+/* Code blocks monochrome border */
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 8px !important;
+}
+
+/* Monochrome scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--vp-c-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vp-c-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
 }

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitepress';
 
-const base = process.env.GITHUB_PAGES ? '/gpui.lua/' : '/';
+const base = process.env.GITHUB_REPOSITORY
+  ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/`
+  : (process.env.GITHUB_PAGES ? '/gpui-lua/' : '/');
 
 export default defineConfig({
   base,

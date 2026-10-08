@@ -158,6 +158,7 @@ jobs:
         working-directory: docs
         env:
           GITHUB_PAGES: 'true'
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: bun run docs:build
 
       - name: Setup Pages
