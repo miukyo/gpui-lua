@@ -2,10 +2,10 @@ use crate::backend::BackendBridge;
 use crate::reactive::store::StoredValue;
 #[cfg(feature = "net")]
 use crate::runtime::ReqwestHttpClient;
-use crate::runtime::{resolve_script_path, CsdOptions, LuaRuntime, LuaView};
+use crate::runtime::{CsdOptions, LuaRuntime, LuaView, resolve_script_path};
 use gpui::{
-    App, AppContext, Bounds, DisplayId, Pixels, SharedString, Size, TitlebarOptions,
-    WindowBounds, WindowDecorations, WindowKind, WindowOptions, px, size,
+    App, AppContext, Bounds, DisplayId, Pixels, SharedString, Size, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowKind, WindowOptions, px, size,
 };
 use mlua::{FromLuaMulti, IntoLua};
 use std::future::Future;
@@ -59,7 +59,9 @@ impl LuaApp {
     }
 
     /// Try to initialize an application whose frontend scripts and assets are embedded in binary.
-    pub fn try_embedded<E: rust_embed::RustEmbed + 'static>(entry_path: impl Into<String>) -> anyhow::Result<Self> {
+    pub fn try_embedded<E: rust_embed::RustEmbed + 'static>(
+        entry_path: impl Into<String>,
+    ) -> anyhow::Result<Self> {
         let entry = entry_path.into();
         let app = Self::try_new(&entry)?;
         app.runtime.register_embedded_assets::<E>();
@@ -67,7 +69,9 @@ impl LuaApp {
     }
 
     /// Initialize application from a standalone bundled package manifest.
-    pub fn from_bundled_manifest(manifest: crate::bundle::AppBundleManifest) -> anyhow::Result<Self> {
+    pub fn from_bundled_manifest(
+        manifest: crate::bundle::AppBundleManifest,
+    ) -> anyhow::Result<Self> {
         let entry = manifest.entrypoint.clone();
         let app = Self::try_new(&entry)?;
         app.runtime.assets().register_file_map(manifest.files);
@@ -98,34 +102,62 @@ impl LuaApp {
         }
         #[cfg(target_os = "windows")]
         {
-            let bg_str = manifest.windows_background.as_deref().or(manifest.background.as_deref());
+            let bg_str = manifest
+                .windows_background
+                .as_deref()
+                .or(manifest.background.as_deref());
             if let Some(bg) = bg_str {
                 match bg.to_lowercase().trim() {
-                    "acrylic" => { app = app.windows_background(gpui::WindowsWindowBackground::Acrylic); }
-                    "mica" => { app = app.windows_background(gpui::WindowsWindowBackground::MicaBackdrop); }
-                    "mica_alt" | "mica-alt" | "tabbed" => { app = app.windows_background(gpui::WindowsWindowBackground::MicaAltBackdrop); }
-                    "opaque" => { app = app.windows_background(gpui::WindowsWindowBackground::Opaque); }
-                    "transparent" => { app = app.windows_background(gpui::WindowsWindowBackground::Transparent); }
-                    "blurred" => { app = app.windows_background(gpui::WindowsWindowBackground::Blurred); }
+                    "acrylic" => {
+                        app = app.windows_background(gpui::WindowsWindowBackground::Acrylic);
+                    }
+                    "mica" => {
+                        app = app.windows_background(gpui::WindowsWindowBackground::MicaBackdrop);
+                    }
+                    "mica_alt" | "mica-alt" | "tabbed" => {
+                        app =
+                            app.windows_background(gpui::WindowsWindowBackground::MicaAltBackdrop);
+                    }
+                    "opaque" => {
+                        app = app.windows_background(gpui::WindowsWindowBackground::Opaque);
+                    }
+                    "transparent" => {
+                        app = app.windows_background(gpui::WindowsWindowBackground::Transparent);
+                    }
+                    "blurred" => {
+                        app = app.windows_background(gpui::WindowsWindowBackground::Blurred);
+                    }
                     _ => {}
                 }
             }
         }
         #[cfg(target_os = "macos")]
         {
-            let bg_str = manifest.macos_background.as_deref().or(manifest.background.as_deref());
+            let bg_str = manifest
+                .macos_background
+                .as_deref()
+                .or(manifest.background.as_deref());
             if let Some(bg) = bg_str {
                 app = app.set_macos_background_str(bg);
             }
         }
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
         {
-            let bg_str = manifest.linux_background.as_deref().or(manifest.background.as_deref());
+            let bg_str = manifest
+                .linux_background
+                .as_deref()
+                .or(manifest.background.as_deref());
             if let Some(bg) = bg_str {
                 match bg.to_lowercase().trim() {
-                    "transparent" => { app = app.linux_background(gpui::LinuxWindowBackground::Transparent); }
-                    "opaque" => { app = app.linux_background(gpui::LinuxWindowBackground::Opaque); }
-                    "blurred" => { app = app.linux_background(gpui::LinuxWindowBackground::Blurred); }
+                    "transparent" => {
+                        app = app.linux_background(gpui::LinuxWindowBackground::Transparent);
+                    }
+                    "opaque" => {
+                        app = app.linux_background(gpui::LinuxWindowBackground::Opaque);
+                    }
+                    "blurred" => {
+                        app = app.linux_background(gpui::LinuxWindowBackground::Blurred);
+                    }
                     _ => {}
                 }
             }
@@ -328,7 +360,10 @@ impl LuaApp {
 
     /// Open the detached Chromium-like DevTools window.
     pub fn open_devtools(self) -> Self {
-        self.runtime.devtools.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.runtime
+            .devtools
+            .is_open
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         self
     }
     /// Load a TrueType or OpenType font from a file path or asset name.
@@ -355,7 +390,6 @@ impl LuaApp {
         self
     }
 
-
     #[cfg(target_os = "macos")]
     /// Set macOS window background appearance.
     pub fn macos_background(mut self, bg: gpui::MacosWindowBackground) -> Self {
@@ -366,13 +400,14 @@ impl LuaApp {
     #[cfg(target_os = "macos")]
     /// Set macOS specific `NSVisualEffectMaterial` window background.
     pub fn macos_material(mut self, material: gpui::MacosVisualEffectMaterial) -> Self {
-        self.window_options.macos_window_background = gpui::MacosWindowBackground::Material(material);
+        self.window_options.macos_window_background =
+            gpui::MacosWindowBackground::Material(material);
         self
     }
 
     #[cfg(target_os = "macos")]
     /// Parse and apply macOS window background appearance or `NSVisualEffectMaterial`.
-    pub fn set_macos_background_str(mut self, bg: &str) -> Self {
+    pub fn set_macos_background_str(self, bg: &str) -> Self {
         let normalized = bg.to_lowercase().trim().replace(['-', ' '], "_");
         match normalized.as_str() {
             "opaque" => self.macos_background(gpui::MacosWindowBackground::Opaque),
@@ -383,20 +418,40 @@ impl LuaApp {
             "menu" => self.macos_material(gpui::MacosVisualEffectMaterial::Menu),
             "popover" => self.macos_material(gpui::MacosVisualEffectMaterial::Popover),
             "sidebar" => self.macos_material(gpui::MacosVisualEffectMaterial::Sidebar),
-            "header_view" | "headerview" => self.macos_material(gpui::MacosVisualEffectMaterial::HeaderView),
+            "header_view" | "headerview" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::HeaderView)
+            }
             "sheet" => self.macos_material(gpui::MacosVisualEffectMaterial::Sheet),
-            "window_background" | "windowbackground" => self.macos_material(gpui::MacosVisualEffectMaterial::WindowBackground),
-            "hud" | "hud_window" | "hudwindow" => self.macos_material(gpui::MacosVisualEffectMaterial::HudWindow),
-            "full_screen_ui" | "fullscreenui" => self.macos_material(gpui::MacosVisualEffectMaterial::FullScreenUI),
+            "window_background" | "windowbackground" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::WindowBackground)
+            }
+            "hud" | "hud_window" | "hudwindow" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::HudWindow)
+            }
+            "full_screen_ui" | "fullscreenui" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::FullScreenUI)
+            }
             "tooltip" => self.macos_material(gpui::MacosVisualEffectMaterial::ToolTip),
-            "content_background" | "contentbackground" => self.macos_material(gpui::MacosVisualEffectMaterial::ContentBackground),
-            "under_window_background" | "underwindowbackground" | "under_window" => self.macos_material(gpui::MacosVisualEffectMaterial::UnderWindowBackground),
-            "under_page_background" | "underpagebackground" | "under_page" => self.macos_material(gpui::MacosVisualEffectMaterial::UnderPageBackground),
-            "appearance_based" | "appearancebased" => self.macos_material(gpui::MacosVisualEffectMaterial::AppearanceBased),
+            "content_background" | "contentbackground" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::ContentBackground)
+            }
+            "under_window_background" | "underwindowbackground" | "under_window" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::UnderWindowBackground)
+            }
+            "under_page_background" | "underpagebackground" | "under_page" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::UnderPageBackground)
+            }
+            "appearance_based" | "appearancebased" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::AppearanceBased)
+            }
             "light" => self.macos_material(gpui::MacosVisualEffectMaterial::Light),
             "dark" => self.macos_material(gpui::MacosVisualEffectMaterial::Dark),
-            "medium_light" | "mediumlight" => self.macos_material(gpui::MacosVisualEffectMaterial::MediumLight),
-            "ultra_dark" | "ultradark" => self.macos_material(gpui::MacosVisualEffectMaterial::UltraDark),
+            "medium_light" | "mediumlight" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::MediumLight)
+            }
+            "ultra_dark" | "ultradark" => {
+                self.macos_material(gpui::MacosVisualEffectMaterial::UltraDark)
+            }
             _ => self,
         }
     }
@@ -459,7 +514,11 @@ impl LuaApp {
     }
 
     /// Emit an event from the Rust backend to Lua frontend listeners (`backend.on(event, handler)`).
-    pub fn emit(&self, event: &str, data: impl serde::Serialize) -> std::result::Result<(), String> {
+    pub fn emit(
+        &self,
+        event: &str,
+        data: impl serde::Serialize,
+    ) -> std::result::Result<(), String> {
         self.runtime.emit(event, data)
     }
 
@@ -500,10 +559,13 @@ impl LuaApp {
                 .with_http_client(http_client)
         };
         #[cfg(not(feature = "net"))]
-        let app = gpui_platform::application()
-            .with_assets(self.runtime.assets().clone());
+        let app = gpui_platform::application().with_assets(self.runtime.assets().clone());
         let is_csd = self.window_options.window_decorations == Some(WindowDecorations::Client)
-            || self.window_options.titlebar.as_ref().is_some_and(|t| t.appears_transparent);
+            || self
+                .window_options
+                .titlebar
+                .as_ref()
+                .is_some_and(|t| t.appears_transparent);
         if is_csd {
             self.runtime.set_csd(true);
         }
@@ -533,10 +595,9 @@ impl LuaApp {
                 window_options.window_bounds = Some(WindowBounds::Windowed(bounds));
             }
 
-            cx.open_window(
-                window_options,
-                |_window, cx| cx.new(|cx| LuaView::new(runtime_clone, cx)),
-            )
+            cx.open_window(window_options, |_window, cx| {
+                cx.new(|cx| LuaView::new(runtime_clone, cx))
+            })
             .expect("Failed to open GPUI window");
         });
 
