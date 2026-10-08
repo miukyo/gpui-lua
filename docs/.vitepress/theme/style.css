@@ -1,29 +1,7 @@
-:root {
-  --vp-c-brand-1: #09090b;
-  --vp-c-brand-2: #27272a;
-  --vp-c-brand-3: #52525b;
-  --vp-c-brand-soft: rgba(0, 0, 0, 0.06);
-
-  --vp-c-bg: #ffffff;
-  --vp-c-bg-alt: #fafafa;
-  --vp-c-bg-elv: #ffffff;
-  --vp-c-bg-soft: #f4f4f5;
-
-  --vp-c-border: #e4e4e7;
-  --vp-c-divider: #e4e4e7;
-  --vp-c-gutter: #f4f4f5;
-
-  --vp-c-text-1: #09090b;
-  --vp-c-text-2: #52525b;
-  --vp-c-text-3: #71717a;
-
-  --vp-code-block-bg: #f4f4f5;
-
-  --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(135deg, #09090b 20%, #71717a 100%);
-}
-
+:root,
 .dark {
+  color-scheme: dark;
+
   --vp-c-brand-1: #ffffff;
   --vp-c-brand-2: #e4e4e7;
   --vp-c-brand-3: #a1a1aa;

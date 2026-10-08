@@ -8,6 +8,7 @@ export default defineConfig({
   base,
   title: 'gpui.lua',
   description: 'Build GPU-accelerated UI with Rust & Lua',
+  appearance: 'force-dark',
   cleanUrls: true,
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
