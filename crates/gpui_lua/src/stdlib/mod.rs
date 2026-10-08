@@ -331,6 +331,16 @@ mod tests {
                 on_scroll_wheel = function() end
             })
             assert(root ~= nil, "ui.div with events failed")
+
+            -- Test HTTP client invocation with callback as second argument
+            local p1 = http.get("https://example.com/api", function() end)
+            assert(p1 ~= nil, "http.get with callback must return promise")
+
+            local p2 = http.get("https://example.com/api", { headers = { ["Authorization"] = "Bearer token" } }, function() end)
+            assert(p2 ~= nil, "http.get with options and callback must return promise")
+
+            local p3 = http.post("https://example.com/api", { name = "test" }, function() end)
+            assert(p3 ~= nil, "http.post with callback must return promise")
         "#).exec()?;
         drop(lua);
 

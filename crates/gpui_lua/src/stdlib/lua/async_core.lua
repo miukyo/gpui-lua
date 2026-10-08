@@ -92,52 +92,168 @@ local async = {
 }
 
 -- 2. Async HTTP Client
+local function normalize_http_args(opts_or_cb, callback)
+    local opts = nil
+    local cb = nil
+    if type(opts_or_cb) == "function" then
+        cb = opts_or_cb
+    elseif type(opts_or_cb) == "table" then
+        opts = opts_or_cb
+        if type(callback) == "function" then
+            cb = callback
+        end
+    elseif type(callback) == "function" then
+        cb = callback
+    end
+    return opts, cb
+end
+
+local function invoke_cb(cb, err, resp)
+    if not cb then return end
+    local info = debug and debug.getinfo and debug.getinfo(cb, "u")
+    if info and info.nparams == 1 and not info.isvararg then
+        if err then
+            pcall(cb, nil)
+        else
+            pcall(cb, resp)
+        end
+    else
+        pcall(cb, err, resp)
+    end
+end
+
 local http = {
-    get = function(url, options)
+    get = function(url, options, callback)
+        local opts, cb = normalize_http_args(options, callback)
         local p, resolve, reject = create_promise()
         __async_http_fetch({
             method = "GET",
             url = url,
-            headers = options and options.headers,
-            timeout = options and options.timeout
+            headers = opts and opts.headers,
+            timeout = opts and opts.timeout
         }, function(err, resp)
             if err then
+                invoke_cb(cb, err, nil)
                 reject(err)
             else
                 resp.json = function()
                     return json.decode(resp.body)
                 end
+                invoke_cb(cb, nil, resp)
                 resolve(resp)
             end
         end)
         return p
     end,
 
-    post = function(url, body, options)
+    post = function(url, body, options, callback)
+        local opts, cb = normalize_http_args(options, callback)
         local p, resolve, reject = create_promise()
         local body_str = (type(body) == "table") and json.encode(body) or tostring(body or "")
         __async_http_fetch({
             method = "POST",
             url = url,
             body = body_str,
-            headers = options and options.headers,
-            timeout = options and options.timeout
+            headers = opts and opts.headers,
+            timeout = opts and opts.timeout
         }, function(err, resp)
             if err then
+                invoke_cb(cb, err, nil)
                 reject(err)
             else
                 resp.json = function()
                     return json.decode(resp.body)
                 end
+                invoke_cb(cb, nil, resp)
                 resolve(resp)
             end
         end)
         return p
     end,
 
-    fetch = function(options)
+    put = function(url, body, options, callback)
+        local opts, cb = normalize_http_args(options, callback)
         local p, resolve, reject = create_promise()
-        __async_http_fetch(options, function(err, resp)
+        local body_str = (type(body) == "table") and json.encode(body) or tostring(body or "")
+        __async_http_fetch({
+            method = "PUT",
+            url = url,
+            body = body_str,
+            headers = opts and opts.headers,
+            timeout = opts and opts.timeout
+        }, function(err, resp)
+            if err then
+                invoke_cb(cb, err, nil)
+                reject(err)
+            else
+                resp.json = function()
+                    return json.decode(resp.body)
+                end
+                invoke_cb(cb, nil, resp)
+                resolve(resp)
+            end
+        end)
+        return p
+    end,
+
+    delete = function(url, options, callback)
+        local opts, cb = normalize_http_args(options, callback)
+        local p, resolve, reject = create_promise()
+        __async_http_fetch({
+            method = "DELETE",
+            url = url,
+            headers = opts and opts.headers,
+            timeout = opts and opts.timeout
+        }, function(err, resp)
+            if err then
+                invoke_cb(cb, err, nil)
+                reject(err)
+            else
+                resp.json = function()
+                    return json.decode(resp.body)
+                end
+                invoke_cb(cb, nil, resp)
+                resolve(resp)
+            end
+        end)
+        return p
+    end,
+
+    request = function(options, callback)
+        local opts, cb = normalize_http_args(options, callback)
+        opts = opts or {}
+        local p, resolve, reject = create_promise()
+        __async_http_fetch(opts, function(err, resp)
+            if err then
+                invoke_cb(cb, err, nil)
+                reject(err)
+            else
+                resp.json = function()
+                    return json.decode(resp.body)
+                end
+                invoke_cb(cb, nil, resp)
+                resolve(resp)
+            end
+        end)
+        return p
+    end,
+
+    fetch = function(url_or_opts, opts_arg)
+        local fetch_opts = {}
+        if type(url_or_opts) == "table" then
+            fetch_opts = url_or_opts
+        elseif type(url_or_opts) == "string" then
+            fetch_opts.url = url_or_opts
+            if type(opts_arg) == "table" then
+                for k, v in pairs(opts_arg) do
+                    fetch_opts[k] = v
+                end
+            end
+        end
+        fetch_opts.method = fetch_opts.method or "GET"
+
+        local p, resolve, reject = create_promise()
+        __async_http_fetch(fetch_opts, function(err, resp)
             if err then
                 reject(err)
             else
