@@ -298,15 +298,15 @@ export class GpuCanvasRenderer {
 
       let textWidth = 10;
       if (this.textCtx) {
-        const fontStr = `${bold ? '600 ' : '400 '}${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        const fontStr = `${bold ? '600 ' : '400 '}${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
         this.textCtx.font = fontStr;
         const metrics = this.textCtx.measureText(text);
-        textWidth = Math.ceil(metrics.width);
+        textWidth = Math.ceil(metrics.width) + 4;
       } else {
-        textWidth = Math.ceil(text.length * fontSize * 0.58);
+        textWidth = Math.ceil(text.length * fontSize * 0.6) + 4;
       }
 
-      const textHeight = Math.ceil(fontSize * 1.35);
+      const textHeight = Math.ceil(fontSize * 1.4);
       const measured = { w: textWidth, h: textHeight };
       this.measuredSizes.set(node, measured);
       return measured;
@@ -469,19 +469,18 @@ export class GpuCanvasRenderer {
       let startX = innerX;
       let actualGap = gap;
 
-      if (node.justifyBetween && node.children.length > 1) {
+      if ((node.justifyBetween || node.justify_between) && node.children.length > 1) {
         let childSum = 0;
         for (const ch of node.children) {
           childSum += (this.measuredSizes.get(ch)?.w || 40);
         }
         actualGap = Math.max(0, (innerW - childSum) / (node.children.length - 1));
         startX = innerX;
-      } else if (node.justifyCenter) {
+      } else if (node.justifyCenter || node.justify_center || node.justify === 'center') {
         startX = innerX + Math.max(0, (innerW - totalChildrenW) / 2);
-      } else if (node.justifyEnd) {
+      } else if (node.justifyEnd || node.justify_end || node.justify === 'end') {
         startX = innerX + Math.max(0, innerW - totalChildrenW);
       }
-
       let curX = startX;
       for (const ch of node.children) {
         const m = this.measuredSizes.get(ch) || { w: 40, h: 30 };
@@ -489,9 +488,9 @@ export class GpuCanvasRenderer {
         const chH = ch.hFull ? innerH : m.h;
 
         let chY = innerY;
-        if (node.itemsCenter || node.items_center) {
+        if (node.itemsCenter || node.items_center || node.items === 'center') {
           chY = innerY + Math.max(0, (innerH - chH) / 2);
-        } else if (node.itemsEnd || node.items_end) {
+        } else if (node.itemsEnd || node.items_end || node.items === 'end') {
           chY = innerY + Math.max(0, innerH - chH);
         }
 
@@ -510,19 +509,18 @@ export class GpuCanvasRenderer {
       let startY = innerY;
       let actualGap = gap;
 
-      if (node.justifyBetween && node.children.length > 1) {
+      if ((node.justifyBetween || node.justify_between) && node.children.length > 1) {
         let childSum = 0;
         for (const ch of node.children) {
           childSum += (this.measuredSizes.get(ch)?.h || 30);
         }
         actualGap = Math.max(0, (innerH - childSum) / (node.children.length - 1));
         startY = innerY;
-      } else if (node.justifyCenter) {
+      } else if (node.justifyCenter || node.justify_center || node.justify === 'center') {
         startY = innerY + Math.max(0, (innerH - totalChildrenH) / 2);
-      } else if (node.justifyEnd) {
+      } else if (node.justifyEnd || node.justify_end || node.justify === 'end') {
         startY = innerY + Math.max(0, innerH - totalChildrenH);
       }
-
       let curY = startY;
       for (const ch of node.children) {
         const m = this.measuredSizes.get(ch) || { w: innerW, h: 30 };
@@ -530,9 +528,9 @@ export class GpuCanvasRenderer {
         const chH = ch.hFull ? innerH : (typeof ch.h === 'number' ? ch.h : m.h);
 
         let chX = innerX;
-        if (node.itemsCenter || node.items_center) {
+        if (node.itemsCenter || node.items_center || node.items === 'center') {
           chX = innerX + Math.max(0, (innerW - chW) / 2);
-        } else if (node.itemsEnd || node.items_end) {
+        } else if (node.itemsEnd || node.items_end || node.items === 'end') {
           chX = innerX + Math.max(0, innerW - chW);
         }
 
@@ -675,9 +673,12 @@ export class GpuCanvasRenderer {
     // Rasterize at high-DPI resolution
     const fontStr = `${bold ? '600 ' : '400 '}${Math.round(size * dpr)}px ${fontFamily ? `"${fontFamily}", ` : ''}-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
 
+    // 1. Set font on context before measuring
+    ctx.font = fontStr;
     const metrics = ctx.measureText(text);
-    const physicalW = Math.max(1, Math.ceil(metrics.width));
-    const physicalH = Math.max(1, Math.ceil(size * 1.35 * dpr));
+    const padX = Math.ceil(2 * dpr);
+    const physicalW = Math.max(1, Math.ceil(metrics.width) + padX * 2);
+    const physicalH = Math.max(1, Math.ceil(size * 1.45 * dpr));
 
     const logicalW = physicalW / dpr;
     const logicalH = physicalH / dpr;
@@ -685,12 +686,13 @@ export class GpuCanvasRenderer {
     this.textCanvas.width = physicalW;
     this.textCanvas.height = physicalH;
 
+    // 2. Re-apply font and styles after canvas dimension reset
     ctx.clearRect(0, 0, physicalW, physicalH);
     ctx.font = fontStr;
     ctx.fillStyle = `rgba(${Math.round(color[0] * 255)}, ${Math.round(color[1] * 255)}, ${Math.round(color[2] * 255)}, ${color[3]})`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(text, 0, physicalH / 2);
+    ctx.fillText(text, padX, physicalH / 2);
 
     gl.bindTexture(gl.TEXTURE_2D, this.textTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.textCanvas);
@@ -698,12 +700,11 @@ export class GpuCanvasRenderer {
     gl.bindVertexArray(this.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
 
-    let renderX = x;
+    let renderX = x - (padX / dpr);
     if (align === 'center') {
       renderX = x - logicalW / 2;
     }
     const renderY = y - logicalH / 2;
-
     // Strict physical pixel alignment guarantees 1:1 mapping with ZERO blur
     const snapX = Math.round(renderX * dpr) / dpr;
     const snapY = Math.round(renderY * dpr) / dpr;

@@ -1,8 +1,5 @@
 -- Reactive Counter Example in GPUI-CE LuaJIT DSL
 local count, set_count = signal(0, "counter_val")
-http.get("https://www.fruityvice.com/api/fruit/banana", function(err, res)
-    log.info(res.json().name)
-end)
 
 function App()
     return ui.div({

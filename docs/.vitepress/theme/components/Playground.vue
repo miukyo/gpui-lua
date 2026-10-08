@@ -694,6 +694,7 @@ function scrollLogsToBottom(): void {
   border-radius: 8px;
   padding: 1.2rem;
   color: #fafafa;
+}
 
 .callout-icon {
   font-size: 1.6rem;
@@ -719,8 +720,9 @@ function scrollLogsToBottom(): void {
   background-color: #09090b;
   border-top: 1px solid #27272a;
   transition: max-height 0.2s ease;
-  max-height: 180px;
-  height: 100%;
+  max-height: 200px;
+  min-height: 34px;
+  flex-shrink: 0;
 }
 
 .log-drawer.is-collapsed {
@@ -731,7 +733,7 @@ function scrollLogsToBottom(): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.35rem 0.8rem;
+  padding: 0.4rem 0.8rem;
   background-color: #121214;
   border-bottom: 1px solid #27272a;
   cursor: pointer;
@@ -739,7 +741,7 @@ function scrollLogsToBottom(): void {
 }
 
 .drawer-title {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #a1a1aa;
   display: flex;
@@ -758,11 +760,12 @@ function scrollLogsToBottom(): void {
 }
 
 .drawer-body {
-  flex: 1;
+  height: 160px;
   overflow-y: auto;
-  padding: 0.4rem 0.8rem;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  padding: 0.5rem 0.8rem;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 12px;
+  background-color: #09090b;
 }
 
 .log-empty {
@@ -774,23 +777,29 @@ function scrollLogsToBottom(): void {
 .log-row {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.15rem 0;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
   line-height: 1.4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .log-time {
   color: #71717a;
   font-size: 11px;
+  flex-shrink: 0;
 }
 
 .log-badge {
   font-size: 10px;
-  font-weight: 600;
-  padding: 1px 4px;
+  font-weight: 700;
+  padding: 1px 6px;
   border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
+.log-info .log-badge {
   background-color: #18181b;
   color: #ffffff;
   border: 1px solid #3f3f46;
@@ -799,6 +808,12 @@ function scrollLogsToBottom(): void {
 .log-reactive .log-badge {
   background-color: #27272a;
   color: #e4e4e7;
+  border: 1px solid #3f3f46;
+}
+
+.log-warn .log-badge {
+  background-color: #27272a;
+  color: #d4d4d8;
   border: 1px solid #3f3f46;
 }
 
@@ -811,8 +826,8 @@ function scrollLogsToBottom(): void {
 .log-msg {
   color: #fafafa;
   word-break: break-all;
+  white-space: pre-wrap;
 }
-
 @media (max-width: 900px) {
   .workbench-panes {
     flex-direction: column;
