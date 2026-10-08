@@ -442,6 +442,7 @@ pub struct ConsoleEntry {
 }
 
 pub struct DevToolsState {
+    pub enabled: AtomicBool,
     pub active_tab: RwLock<DevToolsTab>,
     pub elements_sub_tab: RwLock<ElementsSubTab>,
     pub storage_sub_tab: RwLock<StorageSubTab>,
@@ -468,6 +469,7 @@ pub struct DevToolsState {
 impl Default for DevToolsState {
     fn default() -> Self {
         Self {
+            enabled: AtomicBool::new(cfg!(debug_assertions)),
             active_tab: RwLock::new(DevToolsTab::Elements),
             elements_sub_tab: RwLock::new(ElementsSubTab::Styles),
             storage_sub_tab: RwLock::new(StorageSubTab::LocalStorage),
@@ -527,6 +529,9 @@ impl DevToolsState {
     }
 
     pub fn log(&self, level: LogLevel, msg: impl Into<String>) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let entry = ConsoleEntry {
             id: self.next_uid(),
             level,
@@ -549,6 +554,9 @@ impl DevToolsState {
         headers: HashMap<String, String>,
         body: Option<String>,
     ) -> u64 {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return 0;
+        }
         let id = self.next_uid();
         let entry = NetworkEntry {
             id,
@@ -573,6 +581,9 @@ impl DevToolsState {
         id
     }
     pub fn record_node_bounds(&self, path: &[usize], bounds: Bounds<Pixels>) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         self.node_bounds.write().insert(path.to_vec(), bounds);
     }
 
@@ -585,6 +596,9 @@ impl DevToolsState {
         body: Option<String>,
         size: usize,
     ) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let mut entries = self.network_entries.write();
         if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
             entry.status = Some(status);
@@ -599,6 +613,9 @@ impl DevToolsState {
     }
 
     pub fn record_ws_opened(&self, _ws_id: u64, url: &str) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let id = self.next_uid();
         let entry = NetworkEntry {
             id,
@@ -622,6 +639,9 @@ impl DevToolsState {
     }
 
     pub fn record_ws_message(&self, url: &str, is_outgoing: bool, payload: &str) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let mut entries = self.network_entries.write();
         if let Some(entry) = entries
             .iter_mut()
@@ -638,6 +658,9 @@ impl DevToolsState {
     }
 
     pub fn record_webrtc_peer(&self, peer_id: u64, state_info: &str) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let mut entries = self.network_entries.write();
         if let Some(entry) = entries
             .iter_mut()
@@ -681,7 +704,12 @@ pub fn record_global_http_request(
     headers: HashMap<String, String>,
     body: Option<String>,
 ) -> Option<u64> {
-    ACTIVE_DEVTOOLS.read().as_ref().map(|dt| dt.record_http_request(method, url, headers, body))
+    let dt = ACTIVE_DEVTOOLS.read();
+    let dt = dt.as_ref()?;
+    if !dt.enabled.load(Ordering::Relaxed) {
+        return None;
+    }
+    Some(dt.record_http_request(method, url, headers, body))
 }
 
 pub fn record_global_http_response(
@@ -693,31 +721,40 @@ pub fn record_global_http_response(
     size: usize,
 ) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
-        dt.record_http_response(id, status, status_text, headers, body, size);
+        if dt.enabled.load(Ordering::Relaxed) {
+            dt.record_http_response(id, status, status_text, headers, body, size);
+        }
     }
 }
 
 pub fn record_global_ws_opened(ws_id: u64, url: &str) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
-        dt.record_ws_opened(ws_id, url);
+        if dt.enabled.load(Ordering::Relaxed) {
+            dt.record_ws_opened(ws_id, url);
+        }
     }
 }
 
 pub fn record_global_ws_message(url: &str, is_outgoing: bool, payload: &str) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
-        dt.record_ws_message(url, is_outgoing, payload);
+        if dt.enabled.load(Ordering::Relaxed) {
+            dt.record_ws_message(url, is_outgoing, payload);
+        }
     }
 }
 
 pub fn record_global_webrtc_peer(peer_id: u64, state_info: &str) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
-        dt.record_webrtc_peer(peer_id, state_info);
+        if dt.enabled.load(Ordering::Relaxed) {
+            dt.record_webrtc_peer(peer_id, state_info);
+        }
     }
 }
-
 pub fn record_global_log(level: LogLevel, msg: impl Into<String>) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
-        dt.log(level, msg);
+        if dt.enabled.load(Ordering::Relaxed) {
+            dt.log(level, msg);
+        }
     }
 }
 

@@ -50,6 +50,7 @@ pub struct LuaRuntime {
     queued_fonts: Arc<RwLock<Vec<std::borrow::Cow<'static, [u8]>>>>,
     loaded_font_names: Arc<RwLock<Vec<String>>>,
     pub devtools: Arc<crate::devtools::DevToolsManager>,
+    hot_reload: Arc<AtomicBool>,
 }
 fn init_luau_package_system(lua: &Lua) -> mlua::Result<()> {
     let pkg = lua.create_table();
@@ -123,7 +124,9 @@ impl LuaRuntime {
         let text_system: Arc<RwLock<Option<Arc<gpui::TextSystem>>>> = Arc::new(RwLock::new(None));
         let queued_fonts = Arc::new(RwLock::new(Vec::new()));
         let loaded_font_names = Arc::new(RwLock::new(Vec::new()));
+        let hot_reload = Arc::new(AtomicBool::new(cfg!(debug_assertions)));
         let devtools = crate::devtools::DevToolsManager::new();
+        devtools.set_enabled(cfg!(debug_assertions));
         devtools.state.set_bridge(bridge.clone());
         let lua_arc = Arc::new(Mutex::new(lua));
         backend_bridge.set_lua(lua_arc.clone());
@@ -204,18 +207,25 @@ impl LuaRuntime {
             let dt_open = devtools.clone();
             let dt_toggle = devtools.clone();
             let dt_close = devtools.clone();
+            let dt_hr = hot_reload.clone();
 
             if let Ok(ui_tbl) = lua_guard.globals().get::<mlua::Table>("ui") {
                 let dt_open_c = dt_open.clone();
+                let hr_c = dt_hr.clone();
                 ui_tbl.set("open_devtools", lua_guard.create_function(move |_lua, ()| {
-                    dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                    if hr_c.load(std::sync::atomic::Ordering::SeqCst) {
+                        dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
                     Ok(())
                 })?)?;
 
                 let dt_toggle_c = dt_toggle.clone();
+                let hr_c = dt_hr.clone();
                 ui_tbl.set("toggle_devtools", lua_guard.create_function(move |_lua, ()| {
-                    let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
-                    dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                    if hr_c.load(std::sync::atomic::Ordering::SeqCst) {
+                        let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
+                        dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                    }
                     Ok(())
                 })?)?;
 
@@ -228,14 +238,20 @@ impl LuaRuntime {
 
             let devtools_tbl = lua_guard.create_table();
             let dt_open_c = dt_open.clone();
+            let hr_c = dt_hr.clone();
             devtools_tbl.set("open", lua_guard.create_function(move |_lua, ()| {
-                dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                if hr_c.load(std::sync::atomic::Ordering::SeqCst) {
+                    dt_open_c.is_open.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
                 Ok(())
             })?)?;
             let dt_toggle_c = dt_toggle.clone();
+            let hr_c = dt_hr.clone();
             devtools_tbl.set("toggle", lua_guard.create_function(move |_lua, ()| {
-                let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
-                dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                if hr_c.load(std::sync::atomic::Ordering::SeqCst) {
+                    let cur = dt_toggle_c.is_open.load(std::sync::atomic::Ordering::SeqCst);
+                    dt_toggle_c.is_open.store(!cur, std::sync::atomic::Ordering::SeqCst);
+                }
                 Ok(())
             })?)?;
             let dt_close_c = dt_close.clone();
@@ -244,7 +260,6 @@ impl LuaRuntime {
                 Ok(())
             })?)?;
             lua_guard.globals().set("devtools", devtools_tbl)?;
-
             // Hook print to DevTools console log
             let dt_log = devtools.clone();
             lua_guard.globals().set("print", lua_guard.create_function(move |_lua, args: mlua::MultiValue| {
@@ -321,7 +336,17 @@ impl LuaRuntime {
             queued_fonts,
             loaded_font_names,
             devtools,
+            hot_reload,
         }))
+    }
+
+    pub fn is_hot_reload_enabled(&self) -> bool {
+        self.hot_reload.load(Ordering::SeqCst)
+    }
+
+    pub fn set_hot_reload(&self, enabled: bool) {
+        self.hot_reload.store(enabled, Ordering::SeqCst);
+        self.devtools.set_enabled(enabled);
     }
 
     pub fn set_csd(&self, enabled: bool) {
@@ -577,11 +602,11 @@ impl LuaRuntime {
     }
 
     pub fn enable_hot_reload(self: &Arc<Self>) -> notify::Result<()> {
+        self.set_hot_reload(true);
         let path = match self.script_path.read().clone() {
             Some(p) => p,
             None => return Ok(()),
         };
-
         let runtime_weak = Arc::downgrade(self);
         let watcher = ScriptWatcher::new(
             path,
@@ -601,8 +626,10 @@ impl LuaRuntime {
 
     pub fn render_node(&self) -> Result<LuaNode, HotReloadError> {
         let node_res = self.render_node_internal();
-        if let Ok(ref node) = node_res {
-            *self.devtools.state.element_tree.write() = Some(crate::devtools::state::ElementTreeNode::from_lua_node(node, vec![]));
+        if self.is_hot_reload_enabled() {
+            if let Ok(ref node) = node_res {
+                *self.devtools.state.element_tree.write() = Some(crate::devtools::state::ElementTreeNode::from_lua_node(node, vec![]));
+            }
         }
         node_res
     }
@@ -1257,12 +1284,12 @@ impl Render for LuaView {
         }
 
         // Automatically open detached DevTools window if requested
-        if self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst)
+        if self.runtime.is_hot_reload_enabled()
+            && self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst)
             && self.runtime.devtools.window_handle.read().is_none()
         {
             self.runtime.devtools.open_window(self.runtime.clone(), cx);
         }
-
         match self.runtime.render_node() {
             Ok(node) => {
                 let has_controls = has_window_controls(&node);
@@ -1288,7 +1315,9 @@ impl Render for LuaView {
                             || (m.control && m.shift && k.eq_ignore_ascii_case("i"))
                             || (m.platform && m.alt && k.eq_ignore_ascii_case("i"))
                         {
-                            dt_hk.toggle_window(rt_hk.clone(), cx);
+                            if rt_hk.is_hot_reload_enabled() {
+                                dt_hk.toggle_window(rt_hk.clone(), cx);
+                            }
                             cx.stop_propagation();
                             return;
                         }
@@ -1297,8 +1326,10 @@ impl Render for LuaView {
                         if (m.control && m.shift && k.eq_ignore_ascii_case("c"))
                             || (m.platform && m.shift && k.eq_ignore_ascii_case("c"))
                         {
-                            dt_hk.toggle_inspect_mode();
-                            rt_hk.bridge().notify();
+                            if rt_hk.is_hot_reload_enabled() {
+                                dt_hk.toggle_inspect_mode();
+                                rt_hk.bridge().notify();
+                            }
                             cx.stop_propagation();
                             return;
                         }
@@ -1315,43 +1346,45 @@ impl Render for LuaView {
                         }
                     });
 
-                if is_inspect {
+                if self.runtime.is_hot_reload_enabled() && is_inspect {
                     root_container = root_container.cursor(gpui::CursorStyle::Crosshair);
                 }
 
-                let dt_move = self.runtime.devtools.clone();
-                let bridge_move = self.runtime.bridge().clone();
-                root_container = root_container.on_mouse_move(move |e, _window, _cx| {
-                    if dt_move.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
-                        let hit = dt_move.hit_test_inspect(e.position.x, e.position.y);
-                        *dt_move.state.hovered_path.write() = hit;
-                        bridge_move.notify();
-                    }
-                });
+                if self.runtime.is_hot_reload_enabled() {
+                    let dt_move = self.runtime.devtools.clone();
+                    let bridge_move = self.runtime.bridge().clone();
+                    root_container = root_container.on_mouse_move(move |e, _window, _cx| {
+                        if dt_move.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
+                            let hit = dt_move.hit_test_inspect(e.position.x, e.position.y);
+                            *dt_move.state.hovered_path.write() = hit;
+                            bridge_move.notify();
+                        }
+                    });
 
-                let dt_click = self.runtime.devtools.clone();
-                let bridge_click = self.runtime.bridge().clone();
-                root_container = root_container.on_mouse_down(gpui::MouseButton::Left, move |_e, _window, cx| {
-                    if dt_click.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
-                        let hovered = dt_click.state.hovered_path.read().clone();
-                        *dt_click.state.selected_path.write() = hovered;
-                        dt_click.state.inspect_cursor_active.store(false, std::sync::atomic::Ordering::Relaxed);
-                        cx.stop_propagation();
-                        bridge_click.notify();
-                    }
-                });
+                    let dt_click = self.runtime.devtools.clone();
+                    let bridge_click = self.runtime.bridge().clone();
+                    root_container = root_container.on_mouse_down(gpui::MouseButton::Left, move |_e, _window, cx| {
+                        if dt_click.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed) {
+                            let hovered = dt_click.state.hovered_path.read().clone();
+                            *dt_click.state.selected_path.write() = hovered;
+                            dt_click.state.inspect_cursor_active.store(false, std::sync::atomic::Ordering::Relaxed);
+                            cx.stop_propagation();
+                            bridge_click.notify();
+                        }
+                    });
+                }
 
                 root_container = root_container.child(content);
 
                 // Attach Box Model Overlay on top of root container
-                if self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::Relaxed)
-                    || self.runtime.devtools.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed)
+                if self.runtime.is_hot_reload_enabled()
+                    && (self.runtime.devtools.is_open.load(std::sync::atomic::Ordering::Relaxed)
+                        || self.runtime.devtools.state.inspect_cursor_active.load(std::sync::atomic::Ordering::Relaxed))
                 {
                     root_container = root_container.child(crate::devtools::render_devtools_overlay(self.runtime.devtools.state.clone()));
                 }
                 if self.runtime.is_csd() && !has_controls {
                     div()
-                        .size_full()
                         .relative()
                         .child(root_container)
                         .child(render_frame_titlebar(&self.runtime.csd_options()))
@@ -1704,6 +1737,36 @@ mod test_conference {
         let logs_after = runtime.devtools.state.console_entries.read();
         assert!(logs_after.iter().any(|l| l.message.contains("\"fruit\": \"banana\"")));
         assert!(!logs_after.iter().any(|l| l.message.contains("[table 0x")));
+    }
+
+    #[test]
+    fn test_devtools_only_enabled_when_hot_reload_enabled() {
+        let runtime = LuaRuntime::new().unwrap();
+
+        // 1. Hot reload disabled
+        runtime.set_hot_reload(false);
+        assert!(!runtime.is_hot_reload_enabled());
+        assert!(!runtime.devtools.is_enabled());
+
+        let lua = runtime.lua();
+        let lua = lua.lock();
+        lua.load(r#"
+            ui.open_devtools()
+            devtools.open()
+        "#).exec().expect("open_devtools lua exec failed");
+
+        assert!(!runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst));
+
+        // 2. Hot reload enabled
+        runtime.set_hot_reload(true);
+        assert!(runtime.is_hot_reload_enabled());
+        assert!(runtime.devtools.is_enabled());
+
+        lua.load(r#"
+            ui.open_devtools()
+        "#).exec().expect("open_devtools lua exec failed");
+
+        assert!(runtime.devtools.is_open.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]

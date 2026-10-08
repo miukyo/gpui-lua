@@ -45,8 +45,23 @@ impl DevToolsManager {
         })
     }
 
+    pub fn is_enabled(&self) -> bool {
+        self.state.enabled.load(Ordering::SeqCst)
+    }
+
+    pub fn set_enabled(&self, enabled: bool) {
+        self.state.enabled.store(enabled, Ordering::SeqCst);
+        if !enabled {
+            self.is_open.store(false, Ordering::SeqCst);
+            self.state.inspect_cursor_active.store(false, Ordering::SeqCst);
+        }
+    }
+
     /// Toggle the detached DevTools window.
     pub fn toggle_window(&self, runtime: Arc<LuaRuntime>, cx: &mut App) {
+        if !self.is_enabled() || !runtime.is_hot_reload_enabled() {
+            return;
+        }
         if self.is_open.load(Ordering::SeqCst) {
             self.close_window(cx);
         } else {
@@ -56,13 +71,15 @@ impl DevToolsManager {
 
     /// Open the detached DevTools window.
     pub fn open_window(&self, runtime: Arc<LuaRuntime>, cx: &mut App) {
+        if !self.is_enabled() || !runtime.is_hot_reload_enabled() {
+            return;
+        }
         if self.is_open.load(Ordering::SeqCst) {
             if let Some(handle) = *self.window_handle.read() {
                 let _ = cx.update_window(handle, |_, window, _| window.activate());
                 return;
             }
         }
-
         let state = self.state.clone();
         let window_handle_ref = self.window_handle.clone();
 
@@ -109,6 +126,9 @@ impl DevToolsManager {
     }
     /// Toggle inspect cursor mode.
     pub fn toggle_inspect_mode(&self) {
+        if !self.is_enabled() {
+            return;
+        }
         let current = self.state.inspect_cursor_active.load(Ordering::SeqCst);
         self.state.inspect_cursor_active.store(!current, Ordering::SeqCst);
     }

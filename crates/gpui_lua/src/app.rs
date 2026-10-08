@@ -47,13 +47,15 @@ impl LuaApp {
         runtime.set_title("GPUI-CE Lua");
 
         let csd_options = CsdOptions::default();
+        let hot_reload = cfg!(debug_assertions);
+        runtime.set_hot_reload(hot_reload);
 
         Ok(Self {
             script_path: script_path.as_ref().to_path_buf(),
             window_options,
             csd_options,
             default_size: Some(size(px(800.0), px(600.0))),
-            hot_reload: cfg!(debug_assertions),
+            hot_reload,
             runtime,
         })
     }
@@ -163,9 +165,9 @@ impl LuaApp {
             }
         }
         app.hot_reload = false;
+        app.runtime.set_hot_reload(false);
         Ok(app)
     }
-    /// Register a `RustEmbed` asset bundle with this application.
     pub fn with_embedded_assets<E: rust_embed::RustEmbed + 'static>(self) -> Self {
         self.runtime.register_embedded_assets::<E>();
         self
@@ -358,12 +360,16 @@ impl LuaApp {
         self
     }
 
-    /// Open the detached Chromium-like DevTools window.
+    /// Open the detached Chromium-like DevTools window (requires hot reload to be enabled).
     pub fn open_devtools(self) -> Self {
-        self.runtime
-            .devtools
-            .is_open
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if self.hot_reload {
+            self.runtime
+                .devtools
+                .is_open
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        } else {
+            log::warn!("DevTools is disabled because hot reload is not enabled");
+        }
         self
     }
     /// Load a TrueType or OpenType font from a file path or asset name.
@@ -463,12 +469,12 @@ impl LuaApp {
         self
     }
 
-    /// Enable or disable hot reload on script changes (enabled by default).
+    /// Enable or disable hot reload on script changes (also toggles DevTools).
     pub fn hot_reload(mut self, enabled: bool) -> Self {
         self.hot_reload = enabled;
+        self.runtime.set_hot_reload(enabled);
         self
     }
-
     /// Access the underlying `LuaRuntime`.
     pub fn runtime(&self) -> &Arc<LuaRuntime> {
         &self.runtime
@@ -546,11 +552,10 @@ impl LuaApp {
     pub fn run(self) -> anyhow::Result<()> {
         let resolved_path = resolve_script_path(&self.script_path);
         let _ = self.runtime.load_script(&resolved_path);
-
+        self.runtime.set_hot_reload(self.hot_reload);
         if self.hot_reload && resolved_path.exists() {
             let _ = self.runtime.enable_hot_reload();
         }
-
         #[cfg(feature = "net")]
         let app = {
             let http_client = Arc::new(ReqwestHttpClient::new());

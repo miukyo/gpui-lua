@@ -558,6 +558,8 @@ fn handle_run(args: &[String], hot_reload: bool) -> ExitCode {
             "[Info] Live hot reload watcher active on {}",
             script_path.display()
         );
+    } else {
+        app = app.hot_reload(false);
     }
 
     if let Err(e) = app.run() {
