@@ -118,9 +118,11 @@ pub fn register(lua: &Lua, engine: AsyncEngine) -> Result<()> {
             let timeout_secs: u64 = opts.get("timeout").unwrap_or(30);
 
             let mut req_headers = reqwest::header::HeaderMap::new();
+            let mut devtools_headers = HashMap::new();
             if let Ok(headers_tbl) = opts.get::<Table>("headers") {
                 for pair in headers_tbl.pairs::<String, String>() {
                     if let Ok((k, v)) = pair {
+                        devtools_headers.insert(k.clone(), v.clone());
                         if let (Ok(hn), Ok(hv)) = (k.parse::<reqwest::header::HeaderName>(), v.parse()) {
                             req_headers.insert(hn, hv);
                         }
@@ -128,10 +130,16 @@ pub fn register(lua: &Lua, engine: AsyncEngine) -> Result<()> {
                 }
             }
 
+            let req_id = crate::devtools::state::record_global_http_request(
+                &method_str,
+                &url_str,
+                devtools_headers,
+                body_str.clone(),
+            );
+
             let cb_key = SyncRegistryKey::new(_lua.create_registry_value(callback)?);
             let bridge = eng_http.bridge.clone();
             let lua_ref = eng_lua.clone();
-
             crate::tokio_runtime().spawn(async move {
                 let client = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(timeout_secs))
@@ -168,6 +176,30 @@ pub fn register(lua: &Lua, engine: AsyncEngine) -> Result<()> {
                     Err(e) => Err(e.to_string()),
                 };
 
+                if let Some(id) = req_id {
+                    match &response_result {
+                        Ok((status, status_text, headers_map, body)) => {
+                            crate::devtools::state::record_global_http_response(
+                                id,
+                                *status,
+                                status_text,
+                                headers_map.clone(),
+                                Some(body.clone()),
+                                body.len(),
+                            );
+                        }
+                        Err(err_str) => {
+                            crate::devtools::state::record_global_http_response(
+                                id,
+                                0,
+                                err_str,
+                                HashMap::new(),
+                                None,
+                                0,
+                            );
+                        }
+                    }
+                }
                 let lua_arc_opt = lua_ref.read().clone();
                 if let Some(lua_arc) = lua_arc_opt {
                     let lua = lua_arc.lock();

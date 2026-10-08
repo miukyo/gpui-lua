@@ -12,6 +12,7 @@ pub struct DevToolsView {
     pub state: Arc<DevToolsState>,
     pub runtime: Arc<LuaRuntime>,
     focus_handle: FocusHandle,
+    _notification_task: Option<gpui::Task<()>>,
 }
 
 impl DevToolsView {
@@ -20,10 +21,22 @@ impl DevToolsView {
         runtime: Arc<LuaRuntime>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let (tx, rx) = async_channel::unbounded::<()>();
+        runtime.bridge().add_sender(tx);
+        let task = cx.spawn(async move |weak_view, async_app| {
+            while let Ok(()) = rx.recv().await {
+                while let Ok(()) = rx.try_recv() {}
+                let _ = weak_view.update(async_app, |_view, cx| {
+                    cx.notify();
+                });
+            }
+        });
+
         Self {
             state,
             runtime,
             focus_handle: cx.focus_handle(),
+            _notification_task: Some(task),
         }
     }
 }
@@ -1244,11 +1257,19 @@ impl DevToolsView {
                         div()
                             .flex()
                             .flex_row()
+                            .items_start()
                             .gap(px(8.0))
                             .text_size(px(11.0))
-                            .child(div().text_color(rgb(0x6c7086)).child(log.time_str))
-                            .child(div().text_color(badge_col).font_weight(gpui::FontWeight::BOLD).child(label))
-                            .child(div().text_color(rgb(0xcdd6f4)).child(log.message))
+                            .child(div().text_color(rgb(0x6c7086)).flex_shrink_0().child(log.time_str))
+                            .child(div().text_color(badge_col).flex_shrink_0().font_weight(gpui::FontWeight::BOLD).child(label))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .text_color(rgb(0xcdd6f4))
+                                    .children(log.message.lines().map(|line| div().child(line.to_string())))
+                            )
                     }))
             )
     }

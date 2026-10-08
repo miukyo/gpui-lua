@@ -47,6 +47,7 @@ pub fn register(lua: &Lua, timer_engine: TimerEngine, os_bridge: OsBridge, async
             let msg = format_multi_values(&args);
             log::debug!("{msg}");
             println!("[DEBUG] {msg}");
+            crate::devtools::state::record_global_log(crate::devtools::state::LogLevel::Debug, &msg);
             Ok(())
         })?,
     )?;
@@ -57,6 +58,7 @@ pub fn register(lua: &Lua, timer_engine: TimerEngine, os_bridge: OsBridge, async
             let msg = format_multi_values(&args);
             log::info!("{msg}");
             println!("[INFO] {msg}");
+            crate::devtools::state::record_global_log(crate::devtools::state::LogLevel::Info, &msg);
             Ok(())
         })?,
     )?;
@@ -67,6 +69,7 @@ pub fn register(lua: &Lua, timer_engine: TimerEngine, os_bridge: OsBridge, async
             let msg = format_multi_values(&args);
             log::warn!("{msg}");
             eprintln!("[WARN] {msg}");
+            crate::devtools::state::record_global_log(crate::devtools::state::LogLevel::Warn, &msg);
             Ok(())
         })?,
     )?;
@@ -77,6 +80,7 @@ pub fn register(lua: &Lua, timer_engine: TimerEngine, os_bridge: OsBridge, async
             let msg = format_multi_values(&args);
             log::error!("{msg}");
             eprintln!("[ERROR] {msg}");
+            crate::devtools::state::record_global_log(crate::devtools::state::LogLevel::Error, &msg);
             Ok(())
         })?,
     )?;
@@ -127,24 +131,50 @@ pub fn register_media(lua: &Lua, video: ::media::VideoManager, audio: ::media::A
     Ok(())
 }
 
-fn format_multi_values(args: &MultiValue) -> String {
+pub fn format_lua_value_pretty(val: &Value) -> String {
+    match val {
+        Value::Nil => "nil".to_string(),
+        Value::Boolean(b) => b.to_string(),
+        Value::Integer(i) => i.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => s.to_str().map(|v| v.to_string()).unwrap_or_default(),
+        Value::Table(t) => {
+            if let Ok(json_val) = crate::stdlib::json::lua_value_to_json(Value::Table(t.clone())) {
+                if let Ok(pretty) = serde_json::to_string_pretty(&json_val) {
+                    return pretty;
+                }
+            }
+            let mut entries = Vec::new();
+            for pair in t.clone().pairs::<Value, Value>() {
+                if let Ok((k, v)) = pair {
+                    let k_s = match k {
+                        Value::String(s) => s.to_str().unwrap_or_default().to_string(),
+                        Value::Integer(i) => i.to_string(),
+                        other => format!("{other:?}"),
+                    };
+                    let v_s = format_lua_value_pretty(&v);
+                    entries.push(format!("  \"{k_s}\": {v_s}"));
+                }
+            }
+            if entries.is_empty() {
+                "{}".to_string()
+            } else {
+                format!("{{\n{}\n}}", entries.join(",\n"))
+            }
+        }
+        Value::Function(_) => "[function]".to_string(),
+        Value::UserData(_) => "[userdata]".to_string(),
+        Value::LightUserData(_) => "[lightuserdata]".to_string(),
+        Value::Thread(_) => "[thread]".to_string(),
+        Value::Error(e) => format!("[error: {e}]"),
+        _ => format!("{val:?}"),
+    }
+}
+
+pub fn format_multi_values(args: &MultiValue) -> String {
     let mut parts = Vec::new();
     for val in args.iter() {
-        let s = match val {
-            Value::Nil => "nil".to_string(),
-            Value::Boolean(b) => b.to_string(),
-            Value::Integer(i) => i.to_string(),
-            Value::Number(n) => n.to_string(),
-            Value::String(s) => s.to_str().map(|v| v.to_string()).unwrap_or_default(),
-            Value::Table(t) => format!("[table {:p}]", t),
-            Value::Function(_) => "[function]".to_string(),
-            Value::UserData(_) => "[userdata]".to_string(),
-            Value::LightUserData(_) => "[lightuserdata]".to_string(),
-            Value::Thread(_) => "[thread]".to_string(),
-            Value::Error(e) => format!("[error: {e}]"),
-            _ => format!("{:?}", val),
-        };
-        parts.push(s);
+        parts.push(format_lua_value_pretty(val));
     }
     parts.join(" ")
 }

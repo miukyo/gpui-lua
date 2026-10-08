@@ -463,8 +463,8 @@ pub struct DevToolsState {
     pub frame_time_ms: RwLock<f32>,
     pub collapsed_paths: RwLock<std::collections::HashSet<Vec<usize>>>,
     pub next_id: AtomicU64,
+    pub bridge: RwLock<Option<crate::reactive::bridge::ReactiveBridge>>,
 }
-
 impl Default for DevToolsState {
     fn default() -> Self {
         Self {
@@ -489,6 +489,7 @@ impl Default for DevToolsState {
             frame_time_ms: RwLock::new(16.6),
             collapsed_paths: RwLock::new(std::collections::HashSet::new()),
             next_id: AtomicU64::new(1),
+            bridge: RwLock::new(None),
         }
     }
 }
@@ -515,6 +516,16 @@ impl DevToolsState {
         }
     }
 
+    pub fn set_bridge(&self, bridge: crate::reactive::bridge::ReactiveBridge) {
+        *self.bridge.write() = Some(bridge);
+    }
+
+    pub fn notify_bridge(&self) {
+        if let Some(ref b) = *self.bridge.read() {
+            b.notify();
+        }
+    }
+
     pub fn log(&self, level: LogLevel, msg: impl Into<String>) {
         let entry = ConsoleEntry {
             id: self.next_uid(),
@@ -527,6 +538,8 @@ impl DevToolsState {
         if entries.len() > 1000 {
             entries.remove(0);
         }
+        drop(entries);
+        self.notify_bridge();
     }
 
     pub fn record_http_request(
@@ -556,6 +569,7 @@ impl DevToolsState {
             webrtc_stats: None,
         };
         self.network_entries.write().push(entry);
+        self.notify_bridge();
         id
     }
     pub fn record_node_bounds(&self, path: &[usize], bounds: Bounds<Pixels>) {
@@ -580,6 +594,8 @@ impl DevToolsState {
             entry.response_body = body;
             entry.response_size = size;
         }
+        drop(entries);
+        self.notify_bridge();
     }
 
     pub fn record_ws_opened(&self, _ws_id: u64, url: &str) {
@@ -696,6 +712,12 @@ pub fn record_global_ws_message(url: &str, is_outgoing: bool, payload: &str) {
 pub fn record_global_webrtc_peer(peer_id: u64, state_info: &str) {
     if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
         dt.record_webrtc_peer(peer_id, state_info);
+    }
+}
+
+pub fn record_global_log(level: LogLevel, msg: impl Into<String>) {
+    if let Some(ref dt) = *ACTIVE_DEVTOOLS.read() {
+        dt.log(level, msg);
     }
 }
 

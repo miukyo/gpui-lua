@@ -124,6 +124,7 @@ impl LuaRuntime {
         let queued_fonts = Arc::new(RwLock::new(Vec::new()));
         let loaded_font_names = Arc::new(RwLock::new(Vec::new()));
         let devtools = crate::devtools::DevToolsManager::new();
+        devtools.state.set_bridge(bridge.clone());
         let lua_arc = Arc::new(Mutex::new(lua));
         backend_bridge.set_lua(lua_arc.clone());
         async_engine.set_lua(lua_arc.clone());
@@ -247,21 +248,7 @@ impl LuaRuntime {
             // Hook print to DevTools console log
             let dt_log = devtools.clone();
             lua_guard.globals().set("print", lua_guard.create_function(move |_lua, args: mlua::MultiValue| {
-                let mut parts = Vec::new();
-                for arg in args.iter() {
-                    match arg {
-                        mlua::Value::String(s) => parts.push(s.to_str().unwrap_or_default().to_string()),
-                        mlua::Value::Table(t) => {
-                            if let Ok(json) = crate::stdlib::json::lua_value_to_json(mlua::Value::Table(t.clone())) {
-                                parts.push(json.to_string());
-                            } else {
-                                parts.push(format!("{arg:?}"));
-                            }
-                        }
-                        other => parts.push(format!("{other:?}")),
-                    }
-                }
-                let msg = parts.join("\t");
+                let msg = crate::stdlib::format_multi_values(&args);
                 println!("{msg}");
                 dt_log.state.log(crate::devtools::state::LogLevel::Info, &msg);
                 Ok(())
@@ -1698,15 +1685,25 @@ mod test_conference {
         let req_id = runtime.devtools.state.record_http_request("GET", "https://api.example.com/test", std::collections::HashMap::new(), None);
         runtime.devtools.state.record_http_response(req_id, 200, "OK", std::collections::HashMap::new(), Some(r#"{"status":"ok"}"#.to_string()), 15);
 
-        let entries = runtime.devtools.state.network_entries.read();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].url, "https://api.example.com/test");
-        assert_eq!(entries[0].status, Some(200));
+        {
+            let entries = runtime.devtools.state.network_entries.read();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].url, "https://api.example.com/test");
+            assert_eq!(entries[0].status, Some(200));
+        }
 
         runtime.devtools.state.log(crate::devtools::state::LogLevel::Info, "DevTools initialized successfully");
-        let logs = runtime.devtools.state.console_entries.read();
-        assert_eq!(logs.len(), 1);
-        assert_eq!(logs[0].message, "DevTools initialized successfully");
+        {
+            let logs = runtime.devtools.state.console_entries.read();
+            assert!(logs.iter().any(|l| l.message == "DevTools initialized successfully"));
+        }
+        lua.load(r#"
+            log.info({ fruit = "banana", count = 5 })
+        "#).exec().expect("log.info failed");
+
+        let logs_after = runtime.devtools.state.console_entries.read();
+        assert!(logs_after.iter().any(|l| l.message.contains("\"fruit\": \"banana\"")));
+        assert!(!logs_after.iter().any(|l| l.message.contains("[table 0x")));
     }
 
     #[test]
